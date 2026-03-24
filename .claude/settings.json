@@ -1,0 +1,14 @@
+{
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cd \"$CLAUDE_PROJECT_DIR\" && git diff --quiet && git diff --cached --quiet || (git add -A && git commit -m 'Auto: Claude Code' && git push)"
+          }
+        ]
+      }
+    ]
+  }
+}
