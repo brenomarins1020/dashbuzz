@@ -6,7 +6,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { UserPlus, ChevronDown, Copy, Check, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
-const BASE_URL = "https://dashbuz.lovable.app";
+const BASE_URL = window.location.origin;
 
 export function InvitePanel() {
   const { workspaceId, workspaceName } = useWorkspace();

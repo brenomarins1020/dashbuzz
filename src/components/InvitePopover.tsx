@@ -7,7 +7,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { Link2, Copy, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
-const BASE_URL = "https://dashbuz.lovable.app";
+const BASE_URL = window.location.origin;
 
 export function InvitePopover() {
   const { workspaceId, workspaceName } = useWorkspace();
