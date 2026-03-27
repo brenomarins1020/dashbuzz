@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Loader2, Search } from "lucide-react";
 import { usePosts, type Post } from "@/hooks/usePosts";
 import { useWorkspaceConfig } from "@/hooks/useWorkspaceConfig";
+import { useTeam } from "@/hooks/useTeam";
 import { getIcon, getIconColor } from "@/lib/icons";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
@@ -91,6 +92,7 @@ interface PostFormModalProps {
 
 export function PostFormModal({ open, onOpenChange, post, onSave: onSaveProp, onUpdate: onUpdateProp }: PostFormModalProps) {
   const { activeResponsibles } = useWorkspaceConfig();
+  const { members } = useTeam();
   const { addPost, updatePost } = usePosts();
   const onSave = onSaveProp ?? addPost;
   const onUpdate = onUpdateProp ?? updatePost;
@@ -105,7 +107,11 @@ export function PostFormModal({ open, onOpenChange, post, onSave: onSaveProp, on
   const [saving, setSaving] = useState(false);
 
   const isEditing = !!post;
-  const responsibleOptions = activeResponsibles.map((r) => r.name);
+  const responsibleOptions = useMemo(() => {
+    const fromConfig = activeResponsibles.map((r) => r.name);
+    const fromMembers = members.map((m) => m.nome);
+    return [...new Set([...fromConfig, ...fromMembers])];
+  }, [activeResponsibles, members]);
 
   useEffect(() => {
     if (open && post) {

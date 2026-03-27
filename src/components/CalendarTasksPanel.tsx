@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useMemo } from "react";
 import { Plus, ListChecks, Filter, CheckCircle2, Circle, Trash2, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -9,6 +9,7 @@ import { cn } from "@/lib/utils";
 import { useTasks, type Task } from "@/hooks/useTasks";
 import { useToast } from "@/hooks/use-toast";
 import { useWorkspaceConfig } from "@/hooks/useWorkspaceConfig";
+import { useTeam } from "@/hooks/useTeam";
 
 type StatusFilter = "todas" | "A Fazer" | "Pronto";
 
@@ -21,7 +22,15 @@ export function CalendarTasksPanel() {
   const { tasks, loading, addTask, updateTask, deleteTask } = useTasks();
   const { toast } = useToast();
   const config = useWorkspaceConfig();
-  const activeResponsibles = config.responsibles.filter((r) => r.is_active);
+  const { members } = useTeam();
+  const activeResponsibles = useMemo(() => {
+    const fromConfig = config.responsibles.filter((r) => r.is_active);
+    const configNames = new Set(fromConfig.map((r) => r.name));
+    const fromMembers = members
+      .filter((m) => !configNames.has(m.nome))
+      .map((m) => ({ id: m.id, name: m.nome, is_active: true } as any));
+    return [...fromConfig, ...fromMembers];
+  }, [config.responsibles, members]);
   const [filter, setFilter] = useState<StatusFilter>("todas");
   const [quickTitle, setQuickTitle] = useState("");
   const [quickAssignee, setQuickAssignee] = useState("");

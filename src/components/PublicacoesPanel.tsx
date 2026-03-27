@@ -10,6 +10,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { usePosts, type Post } from "@/hooks/usePosts";
 import { useWorkspaceConfig } from "@/hooks/useWorkspaceConfig";
+import { useTeam } from "@/hooks/useTeam";
 import { useWorkspace } from "@/hooks/useWorkspace";
 import { StatusBadgeFilled } from "@/components/StatusBadgeFilled";
 import { QuickEditModal, type QuickEditItem } from "@/components/QuickEditModal";
@@ -175,6 +176,7 @@ export function PublicacoesPanel() {
   const { posts, addPost: onAdd, updatePost: onUpdate, deletePost: onDelete } = usePosts();
   const config = useWorkspaceConfig();
   const { isAdmin } = useWorkspace();
+  const { members } = useTeam();
   const { activeProfiles, activeCategories, activeStatuses, profiles, categories, statuses, roles } = config;
 
   const [search, setSearch] = useState("");
@@ -200,7 +202,11 @@ export function PublicacoesPanel() {
   // Quick edit modals
   const [editModal, setEditModal] = useState<"profiles" | "categories" | "statuses" | "members" | null>(null);
 
-  const responsibleOptions = config.activeResponsibles.map((r) => r.name);
+  const responsibleOptions = useMemo(() => {
+    const fromConfig = config.activeResponsibles.map((r) => r.name);
+    const fromMembers = members.map((m) => m.nome);
+    return [...new Set([...fromConfig, ...fromMembers])];
+  }, [config.activeResponsibles, members]);
 
   const isPostOverdue = useCallback((post: Post) => {
     if (!post.data_postagem) return false;

@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useCallback, useMemo } from "react";
+import React, { createContext, useContext, useCallback, useMemo, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useWorkspace } from "@/hooks/useWorkspace";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -143,6 +143,29 @@ export function WorkspaceConfigProvider({ children }: { children: React.ReactNod
   const invalidateAll = useCallback(async () => {
     await qc.invalidateQueries({ queryKey: ["ws-config"] });
   }, [qc]);
+
+  // Realtime: sync config changes across all members instantly
+  useEffect(() => {
+    if (!workspaceId) return;
+    const tables = [
+      "publishing_profiles",
+      "content_categories",
+      "workflow_statuses",
+      "team_roles",
+      "workspace_responsibles",
+      "appointment_types",
+    ];
+    const channel = supabase.channel(`ws-config-realtime-${workspaceId}`);
+    tables.forEach((table) => {
+      channel.on(
+        "postgres_changes" as any,
+        { event: "*", schema: "public", table, filter: `workspace_id=eq.${workspaceId}` },
+        () => { qc.invalidateQueries({ queryKey: ["ws-config"] }); }
+      );
+    });
+    channel.subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [workspaceId, qc]);
 
   const addProfile = useCallback(async (data: { name: string; icon_key?: string }) => {
     if (!workspaceId) return;

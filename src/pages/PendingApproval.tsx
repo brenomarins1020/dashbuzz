@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Clock, Mail } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "react-router-dom";
@@ -37,7 +37,15 @@ export default function PendingApproval() {
       });
   }, [user]);
 
-  // Realtime: listen for approval → auto-redirect
+  // Realtime + polling: listen for approval → auto-redirect
+  const redirected = useRef(false);
+  const goToDashboard = () => {
+    if (redirected.current) return;
+    redirected.current = true;
+    // Full reload ensures workspace data is fresh
+    window.location.replace("/");
+  };
+
   useEffect(() => {
     if (!user) return;
 
@@ -54,8 +62,7 @@ export default function PendingApproval() {
         (payload) => {
           const newStatus = (payload.new as any)?.status;
           if (newStatus === "approved") {
-            // Approved! Navigate to dashboard
-            navigate("/", { replace: true });
+            goToDashboard();
           } else if (newStatus === "rejected") {
             setRequestStatus("rejected");
           }
@@ -63,7 +70,6 @@ export default function PendingApproval() {
       )
       .subscribe();
 
-    // Also listen for membership creation (direct approval)
     const memberChannel = supabase
       .channel(`membership-created-${user.id}`)
       .on(
@@ -74,17 +80,27 @@ export default function PendingApproval() {
           table: "memberships",
           filter: `user_id=eq.${user.id}`,
         },
-        () => {
-          navigate("/", { replace: true });
-        }
+        () => { goToDashboard(); }
       )
       .subscribe();
+
+    // Polling fallback every 5s (in case realtime is not configured on the project)
+    const poll = setInterval(async () => {
+      const { data } = await supabase
+        .from("memberships")
+        .select("id")
+        .eq("user_id", user.id)
+        .limit(1)
+        .single();
+      if (data) goToDashboard();
+    }, 5000);
 
     return () => {
       supabase.removeChannel(channel);
       supabase.removeChannel(memberChannel);
+      clearInterval(poll);
     };
-  }, [user, navigate]);
+  }, [user]);
 
   const handleSignOut = async () => {
     localStorage.removeItem("pendingInviteToken");

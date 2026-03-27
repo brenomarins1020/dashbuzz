@@ -27,6 +27,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useAppointments, type Appointment, type AppointmentStatus, type AppointmentRecurrence } from "@/hooks/useAppointments";
 import { useWorkspaceConfig } from "@/hooks/useWorkspaceConfig";
+import { useTeam } from "@/hooks/useTeam";
 import { useWorkspace } from "@/hooks/useWorkspace";
 import { StatusBadgeFilled } from "@/components/StatusBadgeFilled";
 import { QuickEditModal, type QuickEditItem } from "@/components/QuickEditModal";
@@ -597,6 +598,7 @@ export function CompromissosPanel() {
   const { appointments, addAppointment, updateAppointment, removeAppointment } = useAppointments();
   const config = useWorkspaceConfig();
   const { isAdmin } = useWorkspace();
+  const { members } = useTeam();
   const { activeResponsibles, activeAppointmentTypes, appointmentTypes } = config;
 
   // Filters
@@ -623,7 +625,11 @@ export function CompromissosPanel() {
   // Quick edit modal
   const [editModal, setEditModal] = useState<"types" | "responsibles" | null>(null);
 
-  const responsibleOptions = activeResponsibles.map((r) => r.name);
+  const responsibleOptions = useMemo(() => {
+    const fromConfig = activeResponsibles.map((r) => r.name);
+    const fromMembers = members.map((m) => m.nome);
+    return [...new Set([...fromConfig, ...fromMembers])];
+  }, [activeResponsibles, members]);
 
   // Auto-set default type
   useMemo(() => {
