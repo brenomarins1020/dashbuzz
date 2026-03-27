@@ -88,7 +88,13 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
           setWorkspaceName(ws.name);
           setWorkspaceType(ws.type);
           setWorkspaceCreatedAt(ws.created_at);
-          setTaskCat1Label((ws as any).task_cat1_label || "Categoria 1");
+          const cat1Raw = (ws as any).task_cat1_label;
+          // Auto-migrate old default "Categoria 1" → "Área"
+          const cat1 = (!cat1Raw || cat1Raw === "Categoria 1") ? "Área" : cat1Raw;
+          if (!cat1Raw || cat1Raw === "Categoria 1") {
+            supabase.from("workspaces").update({ task_cat1_label: "Área" } as any).eq("id", wsId).then(() => {});
+          }
+          setTaskCat1Label(cat1);
           setTaskCat2Label((ws as any).task_cat2_label || "Categoria 2");
           localStorage.setItem("onboardingName", ws.name);
           localStorage.setItem("onboardingType", ws.type);

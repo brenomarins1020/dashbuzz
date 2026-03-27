@@ -525,7 +525,7 @@ export default function Welcome() {
                 />
               </div>
               <p className="text-xs text-white/35 leading-relaxed" style={dmSans}>
-                Escolha qualquer nome — pode ser seu primeiro nome, apelido ou qualquer coisa. <strong className="text-white/50">Guarde-o bem</strong>, pois você precisará dele para entrar novamente.
+                Coloque seu nome_sobrenome. <strong className="text-white/50">Guarde-o bem</strong>, pois você precisará dele para entrar novamente.
               </p>
               {joinUsername.length > 0 && !usernameValid && (
                 <p className="text-xs" style={{ color: "#f87171", ...dmSans }}>Mínimo 3 caracteres (letras, números, _)</p>

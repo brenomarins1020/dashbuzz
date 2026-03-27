@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useCallback } from "react";
 import type { useAttendance } from "@/hooks/useAttendance";
 import type { TeamMember } from "@/hooks/useTeam";
 import { useTeam } from "@/hooks/useTeam";
@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
@@ -16,6 +17,7 @@ import { useToast } from "@/hooks/use-toast";
 import { toast as sonnerToast } from "sonner";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { useWorkspace } from "@/hooks/useWorkspace";
+import { useTaskCategories } from "@/hooks/useTaskCategories";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -26,8 +28,9 @@ interface Props {
 
 export function AttendancePeople({ attendance, members }: Props) {
   const { participants, occurrences, attendance: records, meetings, updateParticipants } = attendance;
-  const { addMember, removeMember } = useTeam();
+  const { addMember, removeMember, updateMember } = useTeam();
   const { workspaceId, isAdmin } = useWorkspace();
+  const { activeGroup1: areaOptions } = useTaskCategories();
   const { toast } = useToast();
   const qc = useQueryClient();
   const [detailName, setDetailName] = useState<string | null>(null);
@@ -162,6 +165,14 @@ export function AttendancePeople({ attendance, members }: Props) {
     }
   };
 
+  const handleSetArea = useCallback(async (memberId: string, area: string) => {
+    try {
+      await updateMember(memberId, { cargo: area });
+    } catch {
+      toast({ title: "Erro ao salvar área", variant: "destructive" });
+    }
+  }, [updateMember, toast]);
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -292,6 +303,31 @@ export function AttendancePeople({ attendance, members }: Props) {
                   <div className="flex items-center gap-2 mb-3">
                     <Progress value={m.pct} className="h-1.5 flex-1" />
                     <span className="text-xs text-muted-foreground">{m.present}/{m.total}</span>
+                  </div>
+                )}
+
+                {/* Área (task category 1) */}
+                {areaOptions.length > 0 && (
+                  <div className="mb-3">
+                    <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider mb-1">Área</p>
+                    <Select
+                      value={m.teamMember.cargo && m.teamMember.cargo !== "Membro" ? m.teamMember.cargo : ""}
+                      onValueChange={(val) => handleSetArea(m.teamMember.id, val)}
+                    >
+                      <SelectTrigger className="h-7 text-xs rounded-lg">
+                        <SelectValue placeholder="Selecionar área..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {areaOptions.map((a) => (
+                          <SelectItem key={a.id} value={a.name}>
+                            <span className="flex items-center gap-2">
+                              {a.color && <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: a.color }} />}
+                              {a.name}
+                            </span>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                 )}
 

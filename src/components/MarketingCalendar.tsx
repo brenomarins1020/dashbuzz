@@ -215,7 +215,7 @@ export function MarketingCalendar({}: MarketingCalendarProps = {}) {
   }, [currentDate]);
 
   const { posts, updatePost, deletePost } = usePosts(calendarRange);
-  const { appointments, updateAppointment } = useAppointments(calendarRange);
+  const { appointments, updateAppointment, removeAppointment } = useAppointments(calendarRange);
   const [visibility, setVisibility] = useState<CalendarVisibility>(loadVisibility);
   const [selectedProfiles, setSelectedProfiles] = useState<Set<string>>(new Set());
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -226,7 +226,7 @@ export function MarketingCalendar({}: MarketingCalendarProps = {}) {
   const [editingItem, setEditingItem] = useState<{ type: string; id: string } | null>(null);
 
   // Delete confirmation state
-  const [deleteConfirm, setDeleteConfirm] = useState<{ type: "post"; id: string } | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<{ type: "post" | "appointment"; id: string } | null>(null);
 
   // DnD state
   const [dragOverDate, setDragOverDate] = useState<string | null>(null);
@@ -412,7 +412,9 @@ export function MarketingCalendar({}: MarketingCalendarProps = {}) {
     setDragOverDate(ds);
   }, []);
 
-  const handleDragLeave = useCallback(() => {
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    // Only clear when the cursor actually leaves the cell (not when entering a child)
+    if (e.currentTarget.contains(e.relatedTarget as Node)) return;
     setDragOverDate(null);
   }, []);
 
@@ -577,6 +579,7 @@ export function MarketingCalendar({}: MarketingCalendarProps = {}) {
               >
                 <div className="absolute top-0.5 right-0.5 hidden group-hover:flex gap-0.5 z-10">
                   <button onClick={(e) => { e.stopPropagation(); setEditingItem({ type: "appointment", id: appt.id }); }} className="h-5 w-5 rounded flex items-center justify-center bg-card/90 border border-border hover:bg-accent hover:text-accent-foreground transition-colors"><Pencil className="h-2.5 w-2.5" /></button>
+                  <button onClick={(e) => { e.stopPropagation(); setDeleteConfirm({ type: "appointment", id: appt.id }); }} className="h-5 w-5 rounded flex items-center justify-center bg-card/90 border border-border hover:bg-destructive hover:text-destructive-foreground transition-colors"><X className="h-2.5 w-2.5" /></button>
                 </div>
                 {cardContent}
               </div>
@@ -751,7 +754,7 @@ export function MarketingCalendar({}: MarketingCalendarProps = {}) {
                        }}
                       
                       onDragOver={(e) => handleDragOver(e, ds)}
-                      onDragLeave={handleDragLeave}
+                      onDragLeave={(e) => handleDragLeave(e)}
                       onDrop={(e) => handleDrop(e, ds)}
                     >
                       <button
@@ -862,13 +865,18 @@ export function MarketingCalendar({}: MarketingCalendarProps = {}) {
           <AlertDialogHeader>
             <AlertDialogTitle>Tem certeza?</AlertDialogTitle>
             <AlertDialogDescription>
-              Esta mídia será movida para a lixeira.
+              {deleteConfirm?.type === "appointment"
+                ? "Este compromisso será movido para a lixeira."
+                : "Esta mídia será movida para a lixeira."}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={() => {
-              if (deleteConfirm) deletePost(deleteConfirm.id);
+              if (deleteConfirm) {
+                if (deleteConfirm.type === "appointment") removeAppointment(deleteConfirm.id);
+                else deletePost(deleteConfirm.id);
+              }
               setDeleteConfirm(null);
             }}>Excluir</AlertDialogAction>
           </AlertDialogFooter>
