@@ -104,6 +104,21 @@ export function useAttendance() {
   const qc = useQueryClient();
   const enabled = !!workspaceId;
 
+  // Meeting types (standalone query so types show up even before any meeting exists)
+  const meetingTypesQ = useQuery({
+    queryKey: ["meeting-types", workspaceId],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("meeting_types")
+        .select("*")
+        .eq("workspace_id", workspaceId!)
+        .order("created_at", { ascending: true });
+      return (data ?? []) as MeetingType[];
+    },
+    enabled,
+    staleTime: 5 * 60_000,
+  });
+
   // Meetings with types (consolidated query)
   const meetingsWithTypesQ = useQuery({
     queryKey: ["meetings-with-types", workspaceId],
@@ -171,6 +186,7 @@ export function useAttendance() {
         qc.invalidateQueries({ queryKey: ["meetings-with-types", workspaceId] });
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "meeting_types", filter: `workspace_id=eq.${workspaceId}` }, () => {
+        qc.invalidateQueries({ queryKey: ["meeting-types", workspaceId] });
         qc.invalidateQueries({ queryKey: ["meetings-with-types", workspaceId] });
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "meeting_occurrences", filter: `workspace_id=eq.${workspaceId}` }, () => {
@@ -187,6 +203,7 @@ export function useAttendance() {
   }, [workspaceId, qc]);
 
   const refresh = useCallback(() => {
+    qc.invalidateQueries({ queryKey: ["meeting-types"] });
     qc.invalidateQueries({ queryKey: ["meetings-with-types"] });
     qc.invalidateQueries({ queryKey: ["meeting-occurrences"] });
     qc.invalidateQueries({ queryKey: ["attendance-records"] });
@@ -194,11 +211,16 @@ export function useAttendance() {
   }, [qc]);
 
   // CRUD: Meeting Types
-  const addMeetingType = useCallback(async (data: { name: string; color: string; description?: string }) => {
+  const addMeetingType = useCallback(async (data: { name: string; color: string; description?: string }): Promise<string> => {
     if (!workspaceId) throw new Error("No workspace");
-    const { error } = await supabase.from("meeting_types").insert({ ...data, workspace_id: workspaceId } as any);
+    const { data: inserted, error } = await supabase
+      .from("meeting_types")
+      .insert({ ...data, workspace_id: workspaceId } as any)
+      .select("id")
+      .single();
     if (error) throw error;
     refresh();
+    return (inserted as any).id as string;
   }, [workspaceId, refresh]);
 
   const updateMeetingType = useCallback(async (id: string, changes: Partial<MeetingType>) => {
@@ -435,16 +457,11 @@ export function useAttendance() {
     })();
   }, [workspaceId, qc]);
 
-  // Extract meetings and types from consolidated query
+  // Extract meetings from consolidated query
   const rawMeetingsWithTypes = meetingsWithTypesQ.data ?? [];
   const meetings = useMemo(() => rawMeetingsWithTypes.map(({ meeting_types: _, ...m }) => m as Meeting), [rawMeetingsWithTypes]);
-  const meetingTypes = useMemo(() => {
-    const map = new Map<string, MeetingType>();
-    for (const m of rawMeetingsWithTypes) {
-      if (m.meeting_types) map.set(m.meeting_types.id, m.meeting_types);
-    }
-    return [...map.values()];
-  }, [rawMeetingsWithTypes]);
+  // Use the standalone meeting-types query so types appear even before any meeting exists
+  const meetingTypes = meetingTypesQ.data ?? [];
 
   return {
     meetingTypes,
@@ -452,7 +469,7 @@ export function useAttendance() {
     occurrences: occurrencesQ.data ?? [],
     attendance: attendanceQ.data ?? [],
     participants: participantsQ.data ?? [],
-    loading: meetingsWithTypesQ.isLoading || occurrencesQ.isLoading || attendanceQ.isLoading || participantsQ.isLoading,
+    loading: meetingTypesQ.isLoading || meetingsWithTypesQ.isLoading || occurrencesQ.isLoading || attendanceQ.isLoading || participantsQ.isLoading,
     addMeetingType,
     updateMeetingType,
     deleteMeetingType,

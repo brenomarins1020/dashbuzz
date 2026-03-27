@@ -93,10 +93,11 @@ export function MeetingFormModal({ open, onOpenChange, attendance, members }: Pr
   const handleCreateType = async () => {
     if (!newTypeName.trim()) return;
     try {
-      await addMeetingType({ name: newTypeName.trim(), color: newTypeColor });
+      const newId = await addMeetingType({ name: newTypeName.trim(), color: newTypeColor });
+      setTypeId(newId);
       setNewTypeName("");
       setShowNewType(false);
-      toast({ title: "Tipo criado!" });
+      toast({ title: "Tipo criado e selecionado!" });
     } catch {
       toast({ title: "Erro ao criar tipo", variant: "destructive" });
     }
