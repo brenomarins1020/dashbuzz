@@ -4,7 +4,7 @@ import { useWorkspace } from "@/hooks/useWorkspace";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
-import { Plus, Trash2, ChevronDown } from "lucide-react";
+import { Plus, Trash2, ChevronDown, Check, X } from "lucide-react";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -224,6 +224,7 @@ function CategoriesTab({ config }: { config: ReturnType<typeof useWorkspaceConfi
                 onToggle={() => config.updateCategory(c.id, { is_active: !c.is_active })}
                 onDelete={() => config.deleteCategory(c.id)}
                 onRename={(n) => config.updateCategory(c.id, { name: n })}
+                onEditColor={(col) => config.updateCategory(c.id, { color: col })}
                 iconElement={<Icon className="h-4 w-4 shrink-0" style={{ color: iconColor }} />}
                 onEditIconKey={(key) => config.updateCategory(c.id, { icon_key: key } as any)}
                 currentIconKey={c.icon_key}
@@ -270,6 +271,7 @@ function StatusesTab({ config }: { config: ReturnType<typeof useWorkspaceConfig>
               onToggle={() => config.updateStatus(s.id, { is_active: !s.is_active })}
               onDelete={() => config.deleteStatus(s.id)}
               onRename={(n) => config.updateStatus(s.id, { name: n })}
+              onEditColor={(col) => config.updateStatus(s.id, { color: col })}
             />
           ))}
         </div>
@@ -383,6 +385,7 @@ function TaskCategoryTab({ groupNumber, label, taskCats, onRenameLabel }: { grou
               onToggle={() => taskCats.updateOption(o.id, { is_active: !o.is_active })}
               onDelete={() => taskCats.deleteOption(o.id)}
               onRename={(n) => taskCats.updateOption(o.id, { name: n })}
+              onEditColor={(col) => taskCats.updateOption(o.id, { color: col })}
             />
           ))}
         </div>
@@ -401,7 +404,7 @@ function EmptyState({ message }: { message: string }) {
   );
 }
 
-function ConfigRow({ name, subtitle, color, isActive, onToggle, onDelete, onRename, iconElement, onEditIconKey, currentIconKey }: {
+function ConfigRow({ name, subtitle, color, isActive, onToggle, onDelete, onRename, iconElement, onEditIconKey, currentIconKey, onEditColor }: {
   name: string;
   subtitle?: string;
   color?: string;
@@ -412,11 +415,20 @@ function ConfigRow({ name, subtitle, color, isActive, onToggle, onDelete, onRena
   iconElement?: React.ReactNode;
   onEditIconKey?: (key: string) => void;
   currentIconKey?: string;
+  onEditColor?: (color: string) => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [editName, setEditName] = useState(name);
   const [editIconKey, setEditIconKey] = useState(currentIconKey || "instagram");
+  const [editColor, setEditColor] = useState(color || "#3b82f6");
   const [confirmDelete, setConfirmDelete] = useState(false);
+
+  const openEdit = () => {
+    setEditName(name);
+    setEditIconKey(currentIconKey || "instagram");
+    setEditColor(color || "#3b82f6");
+    setEditing(true);
+  };
 
   const handleSave = () => {
     if (editName.trim() && editName.trim() !== name) {
@@ -425,6 +437,16 @@ function ConfigRow({ name, subtitle, color, isActive, onToggle, onDelete, onRena
     if (onEditIconKey && editIconKey !== currentIconKey) {
       onEditIconKey(editIconKey);
     }
+    if (onEditColor && editColor !== color) {
+      onEditColor(editColor);
+    }
+    setEditing(false);
+  };
+
+  const handleCancel = () => {
+    setEditName(name);
+    setEditIconKey(currentIconKey || "instagram");
+    setEditColor(color || "#3b82f6");
     setEditing(false);
   };
 
@@ -432,27 +454,54 @@ function ConfigRow({ name, subtitle, color, isActive, onToggle, onDelete, onRena
     <>
       <div className="space-y-1">
         <div className={cn("flex items-center gap-2 px-3 py-2 rounded-lg border border-border transition-colors", !isActive && "opacity-50")}>
-          {iconElement}
-          {color && !iconElement && <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: color }} />}
+          {/* Color dot or icon */}
+          {editing && onEditColor ? (
+            <input
+              type="color"
+              value={editColor}
+              onChange={(e) => setEditColor(e.target.value)}
+              className="h-6 w-6 rounded-full border border-border cursor-pointer shrink-0 p-0"
+              title="Cor"
+            />
+          ) : (
+            <>
+              {iconElement}
+              {color && !iconElement && <div className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: color }} />}
+            </>
+          )}
+
           {editing ? (
             <Input
               value={editName}
               onChange={(e) => setEditName(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter") handleSave(); if (e.key === "Escape") setEditing(false); }}
-              onBlur={handleSave}
+              onKeyDown={(e) => { if (e.key === "Enter") handleSave(); if (e.key === "Escape") handleCancel(); }}
               autoFocus
               className="h-7 text-xs flex-1"
             />
           ) : (
-            <button onClick={() => { setEditName(name); setEditIconKey(currentIconKey || "instagram"); setEditing(true); }} className="flex-1 text-left min-w-0">
+            <button onClick={openEdit} className="flex-1 text-left min-w-0">
               <span className="text-sm font-medium truncate block">{name}</span>
               {subtitle && <span className="text-[10px] text-muted-foreground">{subtitle}</span>}
             </button>
           )}
-          <Switch checked={isActive} onCheckedChange={onToggle} className="scale-75" />
-          <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive" onClick={() => setConfirmDelete(true)}>
-            <Trash2 className="h-3.5 w-3.5" />
-          </Button>
+
+          {editing ? (
+            <>
+              <Button variant="ghost" size="icon" className="h-7 w-7 text-green-500 hover:text-green-600 hover:bg-green-500/10" onClick={handleSave} title="Salvar">
+                <Check className="h-3.5 w-3.5" />
+              </Button>
+              <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground" onClick={handleCancel} title="Cancelar">
+                <X className="h-3.5 w-3.5" />
+              </Button>
+            </>
+          ) : (
+            <>
+              <Switch checked={isActive} onCheckedChange={onToggle} className="scale-75" />
+              <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive" onClick={() => setConfirmDelete(true)}>
+                <Trash2 className="h-3.5 w-3.5" />
+              </Button>
+            </>
+          )}
         </div>
         {editing && onEditIconKey && (
           <div className="pl-3 pb-1">

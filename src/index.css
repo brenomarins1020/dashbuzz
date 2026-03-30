@@ -425,3 +425,10 @@ body {
     scroll-behavior: auto !important;
   }
 }
+[draggable="true"] {
+  cursor: grab;
+  user-select: none;
+}
+[draggable="true"]:active {
+  cursor: grabbing;
+}

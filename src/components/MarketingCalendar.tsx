@@ -16,8 +16,10 @@ import { useAppointments, type Appointment, type AppointmentStatus, type Appoint
 import { StatusBadgeFilled } from "@/components/StatusBadgeFilled";
 import { ChipSelect } from "@/components/ChipSelect";
 import { useWorkspaceConfig } from "@/hooks/useWorkspaceConfig";
+import { useWorkspace } from "@/hooks/useWorkspace";
 import { getIcon, getIconColor } from "@/lib/icons";
 import { toast } from "sonner";
+import { useQueryClient } from "@tanstack/react-query";
 
 const MAX_VISIBLE_ITEMS = 2;
 const DAYS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
@@ -197,6 +199,8 @@ function loadVisibility(): CalendarVisibility {
 
 export function MarketingCalendar({}: MarketingCalendarProps = {}) {
   const { activeProfiles, activeStatuses, activeCategories, activeResponsibles } = useWorkspaceConfig();
+  const { workspaceId } = useWorkspace();
+  const qc = useQueryClient();
   const [currentDate, setCurrentDate] = useState(() => {
     const now = new Date();
     return new Date(now.getFullYear(), now.getMonth(), 1);
@@ -393,11 +397,14 @@ export function MarketingCalendar({}: MarketingCalendarProps = {}) {
   const handleDragStart = useCallback((e: React.DragEvent, item: UnifiedItem) => {
     const id = item.type === "post" ? (item.data as Post).id
       : (item.data as Appointment).id;
+    const originalDate = item.type === "post"
+      ? (item.data as Post).data_postagem
+      : item.dateStr;
     const recurrence = item.type === "appointment" ? (item.data as Appointment).recurrence : "nenhuma";
     dragDataRef.current = { type: item.type, id, itemType: item.type, recurrence };
     setDraggedItem(item);
     e.dataTransfer.effectAllowed = "move";
-    e.dataTransfer.setData("text/plain", JSON.stringify(dragDataRef.current));
+    e.dataTransfer.setData("text/plain", JSON.stringify({ ...dragDataRef.current, originalDate }));
   }, []);
 
   const handleDragEnd = useCallback((e: React.DragEvent) => {
@@ -421,24 +428,50 @@ export function MarketingCalendar({}: MarketingCalendarProps = {}) {
   const handleDrop = useCallback(async (e: React.DragEvent, targetDate: string) => {
     e.preventDefault();
     setDragOverDate(null);
+    setDraggedItem(null);
     const raw = e.dataTransfer.getData("text/plain");
     if (!raw) return;
-    try {
-      const data = JSON.parse(raw) as { type: string; id: string; recurrence?: string };
-      if (data.type === "post") {
+    let data: { type: string; id: string; recurrence?: string; originalDate?: string };
+    try { data = JSON.parse(raw); } catch { return; }
+
+    // Don't do anything if dropped on the same date
+    if (data.originalDate && data.originalDate === targetDate) return;
+
+    if (data.type === "post") {
+      // Optimistic update
+      qc.setQueriesData<Post[]>({ queryKey: ["posts", "active", workspaceId] }, (old) =>
+        (old ?? []).map(p => p.id === data.id ? { ...p, data_postagem: targetDate } : p)
+      );
+      try {
         await updatePost(data.id, { data_postagem: targetDate });
-        toast.success("Mídia movida para " + targetDate);
-      } else if (data.type === "appointment") {
-        const appt = appointments.find(a => a.id === data.id);
-        if (appt && appt.recurrence !== "nenhuma") {
-          setRecurrenceConfirm({ appt, newDate: targetDate });
-        } else {
+        const d = new Date(targetDate + "T00:00:00");
+        toast.success(`Mídia movida para ${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}`);
+      } catch {
+        // Rollback
+        qc.invalidateQueries({ queryKey: ["posts", "active", workspaceId] });
+        toast.error("Erro ao mover. Tente novamente.");
+      }
+    } else if (data.type === "appointment") {
+      const appt = appointments.find(a => a.id === data.id);
+      if (appt && appt.recurrence !== "nenhuma") {
+        setRecurrenceConfirm({ appt, newDate: targetDate });
+      } else {
+        // Optimistic update
+        qc.setQueriesData<Appointment[]>({ queryKey: ["appointments", "active", workspaceId] }, (old) =>
+          (old ?? []).map(a => a.id === data.id ? { ...a, date: targetDate } : a)
+        );
+        try {
           await updateAppointment(data.id, { date: targetDate });
-          toast.success("Compromisso movido para " + targetDate);
+          const d = new Date(targetDate + "T00:00:00");
+          toast.success(`Compromisso movido para ${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}`);
+        } catch {
+          // Rollback
+          qc.invalidateQueries({ queryKey: ["appointments", "active", workspaceId] });
+          toast.error("Erro ao mover. Tente novamente.");
         }
       }
-    } catch { /* ignore */ }
-  }, [updatePost, updateAppointment, appointments]);
+    }
+  }, [updatePost, updateAppointment, appointments, qc, workspaceId]);
 
   const confirmRecurrenceDrag = useCallback(async () => {
     if (!recurrenceConfirm) return;
