@@ -83,15 +83,22 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
 
         const { data: ws } = await supabase
           .from("workspaces")
-          .select("name, type, created_at, task_cat1_label, task_cat2_label, join_code")
+          .select("name, type, created_at, task_cat1_label, task_cat2_label")
           .eq("id", wsId)
           .single();
+
+        // Fetch join_code separately so a missing column doesn't break workspace loading
+        supabase
+          .from("workspaces")
+          .select("join_code")
+          .eq("id", wsId)
+          .single()
+          .then(({ data: jc }) => { if (jc) setJoinCode((jc as any).join_code || null); });
 
         if (ws) {
           setWorkspaceName(ws.name);
           setWorkspaceType(ws.type);
           setWorkspaceCreatedAt(ws.created_at);
-          setJoinCode((ws as any).join_code || null);
           const cat1Raw = (ws as any).task_cat1_label;
           // Auto-migrate old default "Categoria 1" → "Área"
           const cat1 = (!cat1Raw || cat1Raw === "Categoria 1") ? "Área" : cat1Raw;
