@@ -1158,6 +1158,7 @@ export type Database = {
           created_by: string | null
           id: string
           invite_token: string | null
+          join_code: string | null
           name: string
           task_cat1_label: string
           task_cat2_label: string
@@ -1168,6 +1169,7 @@ export type Database = {
           created_by?: string | null
           id?: string
           invite_token?: string | null
+          join_code?: string | null
           name: string
           task_cat1_label?: string
           task_cat2_label?: string
@@ -1178,6 +1180,7 @@ export type Database = {
           created_by?: string | null
           id?: string
           invite_token?: string | null
+          join_code?: string | null
           name?: string
           task_cat1_label?: string
           task_cat2_label?: string
