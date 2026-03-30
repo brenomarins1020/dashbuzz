@@ -23,20 +23,22 @@ const BackupPanel = lazy(() => import("@/components/BackupPanel").then(m => ({ d
 const TrashPanel = lazy(() => import("@/components/TrashPanel").then(m => ({ default: m.TrashPanel })));
 const AdminAnnouncementsPanel = lazy(() => import("@/components/AdminAnnouncementsPanel").then(m => ({ default: m.AdminAnnouncementsPanel })));
 const WorkspaceConfigPanel = lazy(() => import("@/components/WorkspaceConfigPanel").then(m => ({ default: m.WorkspaceConfigPanel })));
+const InicioPanel = lazy(() => import("@/components/InicioPanel").then(m => ({ default: m.InicioPanel })));
 const TasksPanelNew = lazy(() => import("@/components/TasksPanelNew").then(m => ({ default: m.TasksPanelNew })));
 const InvitePanel = lazy(() => import("@/components/InvitePanel").then(m => ({ default: m.InvitePanel })));
 const ApprovalsPanel = lazy(() => import("@/components/ApprovalsPanel").then(m => ({ default: m.ApprovalsPanel })));
+const WhatsappAgente = lazy(() => import("@/pages/WhatsappAgente").then(m => ({ default: m.WhatsappAgente })));
 
 import { useTheme } from "@/hooks/useTheme";
 import { useAuth } from "@/hooks/useAuth";
 import { useWorkspace } from "@/hooks/useWorkspace";
-import { CalendarDays, LayoutDashboard, Settings, BookOpen, BarChart3, ClipboardCheck, Trash2, LogOut, ChevronDown, User, Users, ListChecks } from "lucide-react";
+import { CalendarDays, LayoutDashboard, Settings, BookOpen, BarChart3, ClipboardCheck, Trash2, LogOut, ChevronDown, User, Users, ListChecks, MessageCircle, Home } from "lucide-react";
 import { InvitePopover } from "@/components/InvitePopover";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 
-type View = "calendar" | "settings" | "publicacoes" | "dados" | "compromissos" | "trash" | "presencas" | "tarefas";
+type View = "inicio" | "calendar" | "settings" | "publicacoes" | "dados" | "compromissos" | "trash" | "presencas" | "tarefas" | "whatsapp";
 
 const NAV_CENTER: { view: View; icon: React.ElementType; label: string } = {
   view: "calendar", icon: CalendarDays, label: "Calendário",
@@ -45,14 +47,17 @@ const NAV_CENTER: { view: View; icon: React.ElementType; label: string } = {
 // MOBILE_NAV and MOBILE_SIDEBAR_WIDTH removed — using MobileBottomNav component
 
 const ALL_DESKTOP_NAV = [
+  { view: "inicio" as View, icon: Home, label: "Início" },
   NAV_CENTER,
   { view: "publicacoes" as View, icon: BookOpen, label: "Mídia" },
   { view: "tarefas" as View, icon: ListChecks, label: "Tarefas" },
   { view: "compromissos" as View, icon: ClipboardCheck, label: "Compromissos" },
   { view: "dados" as View, icon: BarChart3, label: "Dados" },
+  { view: "whatsapp" as View, icon: MessageCircle, label: "WhatsApp" },
 ];
 
 const VIEW_LABELS: Record<View, string> = {
+  inicio: "Início",
   calendar: "Calendário",
   publicacoes: "Mídia",
   tarefas: "Tarefas",
@@ -61,8 +66,9 @@ const VIEW_LABELS: Record<View, string> = {
   presencas: "Gestão",
   settings: "Configurações",
   trash: "Lixeira",
+  whatsapp: "WhatsApp",
 };
-const VALID_VIEWS: View[] = ["calendar", "publicacoes", "tarefas", "compromissos", "dados", "presencas", "settings"];
+const VALID_VIEWS: View[] = ["inicio", "calendar", "publicacoes", "tarefas", "compromissos", "dados", "presencas", "settings", "whatsapp"];
 
 // Module-level splash flag — persists in memory across tab switches
 let _splashAlreadyShown = false;
@@ -104,9 +110,9 @@ const Index = () => {
   const [view, setView] = useState<View>(() => {
     try {
       const saved = localStorage.getItem("dashbuzz_last_view");
-      return VALID_VIEWS.includes(saved as View) ? (saved as View) : "calendar";
+      return VALID_VIEWS.includes(saved as View) ? (saved as View) : "inicio";
     } catch {
-      return "calendar";
+      return "inicio";
     }
   });
   const alreadyShown = hasSplashBeenShown();
@@ -116,7 +122,7 @@ const Index = () => {
   const rafRef = useRef<number>();
 
   const [visitedViews, setVisitedViews] = useState<Set<View>>(() => {
-    const initial = new Set<View>(["calendar"]);
+    const initial = new Set<View>(["inicio"]);
     try {
       const saved = localStorage.getItem("dashbuzz_last_view");
       if (VALID_VIEWS.includes(saved as View)) initial.add(saved as View);
@@ -427,10 +433,17 @@ const Index = () => {
         }}
       >
         
+        {/* Persistent panels — stay mounted once visited, hidden via CSS */}
+        <div style={{ display: view === "inicio" ? "block" : "none" }}>
+          {visitedViews.has("inicio") && (
+            <Suspense fallback={<PanelSkeleton />}>
+              <InicioPanel changeView={changeView} />
+            </Suspense>
+          )}
+        </div>
         {view === "calendar" && (
             <MarketingCalendar />
         )}
-        {/* Persistent panels — stay mounted once visited, hidden via CSS */}
         <div style={{ display: view === "publicacoes" ? "block" : "none" }}>
           {visitedViews.has("publicacoes") && <Suspense fallback={<PanelSkeleton />}><PublicacoesPanel /></Suspense>}
         </div>
@@ -445,6 +458,9 @@ const Index = () => {
         </div>
         <div style={{ display: view === "presencas" ? "block" : "none" }}>
           {visitedViews.has("presencas") && <Suspense fallback={<PanelSkeleton />}><AttendancePanel /></Suspense>}
+        </div>
+        <div style={{ display: view === "whatsapp" ? "block" : "none" }}>
+          {visitedViews.has("whatsapp") && <Suspense fallback={<PanelSkeleton />}><WhatsappAgente /></Suspense>}
         </div>
         
         {view === "settings" && (

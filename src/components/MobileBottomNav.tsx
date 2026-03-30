@@ -1,16 +1,16 @@
 import { useState } from "react";
-import { CalendarDays, ListChecks, BookOpen, BarChart3, Menu, ClipboardCheck, Settings, ChevronRight, Users, LogOut } from "lucide-react";
+import { Home, CalendarDays, ListChecks, BookOpen, Menu, ClipboardCheck, Settings, ChevronRight, Users, LogOut } from "lucide-react";
 import { Drawer, DrawerContent, DrawerTrigger } from "@/components/ui/drawer";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 
-type View = "calendar" | "settings" | "publicacoes" | "dados" | "compromissos" | "trash" | "presencas" | "tarefas";
+type View = "inicio" | "calendar" | "settings" | "publicacoes" | "dados" | "compromissos" | "trash" | "presencas" | "tarefas" | "whatsapp";
 
 const TABS = [
-  { view: "calendar" as View, icon: CalendarDays, label: "Início" },
-  { view: "tarefas" as View, icon: ListChecks, label: "Tarefas" },
-  { view: "publicacoes" as View, icon: BookOpen, label: "Mídia" },
-  { view: "dados" as View, icon: BarChart3, label: "Dados" },
+  { view: "inicio" as View,      icon: Home,        label: "Início" },
+  { view: "calendar" as View,    icon: CalendarDays, label: "Calendário" },
+  { view: "tarefas" as View,     icon: ListChecks,  label: "Tarefas" },
+  { view: "publicacoes" as View, icon: BookOpen,    label: "Mídia" },
 ] as const;
 
 const MORE_VIEWS: View[] = ["compromissos", "presencas", "settings"];
