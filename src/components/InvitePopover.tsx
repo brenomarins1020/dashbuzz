@@ -1,13 +1,27 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useWorkspace } from "@/hooks/useWorkspace";
+import { supabase } from "@/integrations/supabase/client";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Link2, Copy } from "lucide-react";
 import { toast } from "sonner";
 
 export function InvitePopover() {
-  const { joinCode } = useWorkspace();
+  const { workspaceId } = useWorkspace();
   const [open, setOpen] = useState(false);
+  const [joinCode, setJoinCode] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!workspaceId) return;
+    supabase
+      .from("workspaces")
+      .select("join_code")
+      .eq("id", workspaceId)
+      .single()
+      .then(({ data }) => {
+        if (data) setJoinCode((data as any).join_code || null);
+      });
+  }, [workspaceId]);
 
   const handleCopy = () => {
     if (!joinCode) return;
