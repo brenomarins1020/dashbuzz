@@ -9,7 +9,6 @@ import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import Welcome from "./pages/Welcome";
 import Onboarding from "./pages/Onboarding";
-import Invite from "./pages/Invite";
 import ResetPassword from "./pages/ResetPassword";
 import SetPassword from "./pages/SetPassword";
 import PendingApproval from "./pages/PendingApproval";
@@ -66,8 +65,6 @@ const App = () => (
             <Route path="/onboarding" element={<Onboarding />} />
             <Route path="/welcome" element={<Welcome />} />
             <Route path="/auth" element={<Auth />} />
-            <Route path="/invite" element={<Invite />} />
-            <Route path="/invite/:slug" element={<Invite />} />
             <Route path="/login" element={<Navigate to="/auth?mode=login" replace />} />
             <Route path="/reset-password" element={<ResetPassword />} />
             <Route path="/set-password" element={<SetPassword />} />

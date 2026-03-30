@@ -24,21 +24,21 @@ const TrashPanel = lazy(() => import("@/components/TrashPanel").then(m => ({ def
 const AdminAnnouncementsPanel = lazy(() => import("@/components/AdminAnnouncementsPanel").then(m => ({ default: m.AdminAnnouncementsPanel })));
 const WorkspaceConfigPanel = lazy(() => import("@/components/WorkspaceConfigPanel").then(m => ({ default: m.WorkspaceConfigPanel })));
 const InicioPanel = lazy(() => import("@/components/InicioPanel").then(m => ({ default: m.InicioPanel })));
+// WhatsappAgente removed — file not available in production build
 const TasksPanelNew = lazy(() => import("@/components/TasksPanelNew").then(m => ({ default: m.TasksPanelNew })));
 const InvitePanel = lazy(() => import("@/components/InvitePanel").then(m => ({ default: m.InvitePanel })));
 const ApprovalsPanel = lazy(() => import("@/components/ApprovalsPanel").then(m => ({ default: m.ApprovalsPanel })));
-const WhatsappAgente = lazy(() => import("@/pages/WhatsappAgente").then(m => ({ default: m.WhatsappAgente })));
 
 import { useTheme } from "@/hooks/useTheme";
 import { useAuth } from "@/hooks/useAuth";
 import { useWorkspace } from "@/hooks/useWorkspace";
-import { CalendarDays, LayoutDashboard, Settings, BookOpen, BarChart3, ClipboardCheck, Trash2, LogOut, ChevronDown, User, Users, ListChecks, MessageCircle, Home } from "lucide-react";
+import { CalendarDays, LayoutDashboard, Settings, BookOpen, BarChart3, ClipboardCheck, Trash2, LogOut, ChevronDown, User, Users, ListChecks, Home } from "lucide-react";
 import { InvitePopover } from "@/components/InvitePopover";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 
-type View = "inicio" | "calendar" | "settings" | "publicacoes" | "dados" | "compromissos" | "trash" | "presencas" | "tarefas" | "whatsapp";
+type View = "inicio" | "calendar" | "settings" | "publicacoes" | "dados" | "compromissos" | "trash" | "presencas" | "tarefas";
 
 const NAV_CENTER: { view: View; icon: React.ElementType; label: string } = {
   view: "calendar", icon: CalendarDays, label: "Calendário",
@@ -53,7 +53,6 @@ const ALL_DESKTOP_NAV = [
   { view: "tarefas" as View, icon: ListChecks, label: "Tarefas" },
   { view: "compromissos" as View, icon: ClipboardCheck, label: "Compromissos" },
   { view: "dados" as View, icon: BarChart3, label: "Dados" },
-  { view: "whatsapp" as View, icon: MessageCircle, label: "WhatsApp" },
 ];
 
 const VIEW_LABELS: Record<View, string> = {
@@ -66,9 +65,8 @@ const VIEW_LABELS: Record<View, string> = {
   presencas: "Gestão",
   settings: "Configurações",
   trash: "Lixeira",
-  whatsapp: "WhatsApp",
 };
-const VALID_VIEWS: View[] = ["inicio", "calendar", "publicacoes", "tarefas", "compromissos", "dados", "presencas", "settings", "whatsapp"];
+const VALID_VIEWS: View[] = ["inicio", "calendar", "publicacoes", "tarefas", "compromissos", "dados", "presencas", "settings"];
 
 // Module-level splash flag — persists in memory across tab switches
 let _splashAlreadyShown = false;
@@ -459,10 +457,6 @@ const Index = () => {
         <div style={{ display: view === "presencas" ? "block" : "none" }}>
           {visitedViews.has("presencas") && <Suspense fallback={<PanelSkeleton />}><AttendancePanel /></Suspense>}
         </div>
-        <div style={{ display: view === "whatsapp" ? "block" : "none" }}>
-          {visitedViews.has("whatsapp") && <Suspense fallback={<PanelSkeleton />}><WhatsappAgente /></Suspense>}
-        </div>
-        
         {view === "settings" && (
           <Suspense fallback={<PanelSkeleton />}>
             <div className="space-y-4 max-w-2xl">

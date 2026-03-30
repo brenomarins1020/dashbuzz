@@ -103,8 +103,8 @@ export default function PendingApproval() {
   }, [user]);
 
   const handleSignOut = async () => {
-    localStorage.removeItem("pendingInviteToken");
-    localStorage.removeItem("pendingInviteName");
+    localStorage.removeItem("pendingJoinCode");
+    localStorage.removeItem("pendingWorkspaceName");
     await supabase.auth.signOut();
     navigate("/welcome", { replace: true });
   };

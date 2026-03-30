@@ -44,11 +44,8 @@ export default function Auth() {
   const [loading, setLoading] = useState(false);
   const [signupSuccess, setSignupSuccess] = useState(false);
 
-  const inviteToken = localStorage.getItem('pendingInviteToken');
-
   useEffect(() => {
-    const hasInvite = !!localStorage.getItem('pendingInviteToken');
-    if (mode === "signup" && (!obType || !obName) && !hasInvite) {
+    if (mode === "signup" && (!obType || !obName)) {
       navigate("/welcome?step=onboarding", { replace: true });
     }
   }, [mode, obType, obName, navigate]);
@@ -66,8 +63,7 @@ export default function Auth() {
   const setMode = (m: "login" | "signup") => {
     setError("");
     setSignupSuccess(false);
-    const hasInvite = !!localStorage.getItem('pendingInviteToken');
-    if (m === "signup" && (!obType || !obName) && !hasInvite) {
+    if (m === "signup" && (!obType || !obName)) {
       navigate("/welcome?step=onboarding", { replace: true });
       return;
     }
@@ -77,77 +73,14 @@ export default function Auth() {
   const allRulesPass = rules.every((r) => r.test(password));
   const passwordsMatch = password === confirmPassword;
 
-  // social login removed
-
-  /** Try to join workspace via invite token. Returns true if user should stop normal flow. */
-  const tryJoinViaInvite = async (userId: string): Promise<boolean> => {
-    const pendingToken = localStorage.getItem('pendingInviteToken');
-    const pendingName = localStorage.getItem('pendingInviteName') || '';
-    if (!pendingToken) return false;
-
-    // Check if user already has a workspace — skip invite processing
-    const { data: existingMembership } = await supabase
-      .from('memberships')
-      .select('workspace_id')
-      .eq('user_id', userId)
-      .limit(1)
-      .single();
-
-    if (existingMembership) {
-      localStorage.removeItem('pendingInviteToken');
-      localStorage.removeItem('pendingInviteName');
-      return false; // let normal flow continue
-    }
-
-    try {
-      const { data: result } = await supabase
-        .rpc('request_workspace_access', { p_invite_token: pendingToken, p_requester_name: pendingName });
-      const r = result as any;
-
-      localStorage.removeItem('pendingInviteToken');
-      localStorage.removeItem('pendingInviteName');
-
-      if (r && r.status === 'pending_approval') {
-        navigate("/pending-approval", { replace: true });
-        return true;
-      }
-      if (r && r.status === 'already_member') {
-        // User is already a member — let them enter directly
-        if (r.workspace_name) localStorage.setItem('onboardingName', r.workspace_name);
-        if (r.workspace_type) localStorage.setItem('onboardingType', r.workspace_type);
-        return false;
-      }
-      if (r && r.error) {
-        const errMsg = r.error === 'invalid_token' ? 'O convite é inválido ou expirou.' : 'Erro ao processar convite.';
-        toast.error(errMsg);
-      } else if (r && !r.error) {
-        localStorage.setItem('onboardingName', r.workspace_name);
-        localStorage.setItem('onboardingType', r.workspace_type);
-      }
-    } catch (e) {
-      console.error('Invite join failed:', e);
-      toast.error('Erro ao processar convite.');
-      localStorage.removeItem('pendingInviteToken');
-      localStorage.removeItem('pendingInviteName');
-    }
-    return false;
-  };
-
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
     setLoading(true);
     didLoginRef.current = true;
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) throw error;
-
-      const userId = data.user?.id;
-      if (userId) {
-        const shouldStop = await tryJoinViaInvite(userId);
-        if (shouldStop) return;
-      }
-
       navigate("/", { replace: true });
     } catch (err: any) {
       setError(
@@ -181,16 +114,6 @@ export default function Auth() {
       if (error) throw error;
 
       if (data.session) {
-        const userId = data.user?.id;
-        if (userId) {
-          const shouldStop = await tryJoinViaInvite(userId);
-          if (shouldStop) return;
-        }
-
-        // Clean up any residual invite tokens
-        localStorage.removeItem('pendingInviteToken');
-        localStorage.removeItem('pendingInviteName');
-
         try {
           await createWorkspace(obType || "ej", displayName.trim() || obName || "Workspace");
         } catch (wsErr) {
@@ -211,7 +134,7 @@ export default function Auth() {
   };
 
   const currentName = displayName.trim() || obName;
-  const workspaceLabel = mode === "signup" && obType && currentName && !inviteToken
+  const workspaceLabel = mode === "signup" && obType && currentName
     ? `${typeLabels[obType] || obType} — ${currentName}`
     : null;
 
@@ -256,8 +179,8 @@ export default function Auth() {
         </div>
       )}
 
-      {/* Context banners */}
-      {mode === "signup" && !inviteToken && obName && (
+      {/* Context banner */}
+      {mode === "signup" && obName && (
         <div
           className="flex items-center gap-2 text-xs rounded-lg px-3 py-2 mb-4"
           style={{
@@ -269,20 +192,6 @@ export default function Auth() {
         >
           <Info className="h-3.5 w-3.5 shrink-0" />
           Você está criando um novo workspace para {obName}
-        </div>
-      )}
-      {mode === "signup" && inviteToken && (
-        <div
-          className="flex items-center gap-2 text-xs rounded-lg px-3 py-2 mb-4"
-          style={{
-            background: "rgba(245,166,35,0.1)",
-            border: "1px solid rgba(245,166,35,0.2)",
-            color: "rgba(245,166,35,0.9)",
-            ...dmSans,
-          }}
-        >
-          <Info className="h-3.5 w-3.5 shrink-0" />
-          Você está criando sua conta para entrar em um workspace
         </div>
       )}
 
@@ -395,7 +304,6 @@ export default function Auth() {
       ) : (
         /* SIGNUP */
         <form onSubmit={handleSignup} className="glass-card-auth p-6 space-y-4">
-          {!inviteToken && (
           <div className="space-y-2">
             <label htmlFor="name" className="text-sm font-medium text-white/70" style={dmSans}>Nome da instituição</label>
             <input
@@ -413,7 +321,6 @@ export default function Auth() {
               style={dmSans}
             />
           </div>
-          )}
           <div className="space-y-2">
             <label htmlFor="signup-email" className="text-sm font-medium text-white/70" style={dmSans}>Email</label>
             <input
@@ -513,7 +420,7 @@ export default function Auth() {
 
           <button
             type="submit"
-            disabled={loading || !allRulesPass || !passwordsMatch || (!inviteToken && !displayName.trim())}
+            disabled={loading || !allRulesPass || !passwordsMatch || !displayName.trim()}
             className="btn-gold-shimmer w-full h-10 flex items-center justify-center gap-2 text-sm"
             style={dmSans}
           >

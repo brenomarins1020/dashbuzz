@@ -8,6 +8,7 @@ interface WorkspaceContextType {
   workspaceName: string | null;
   workspaceType: string | null;
   workspaceCreatedAt: string | null;
+  joinCode: string | null;
   taskCat1Label: string;
   taskCat2Label: string;
   loading: boolean;
@@ -24,6 +25,7 @@ const WorkspaceContext = createContext<WorkspaceContextType>({
   workspaceName: null,
   workspaceType: null,
   workspaceCreatedAt: null,
+  joinCode: null,
   taskCat1Label: "Categoria 1",
   taskCat2Label: "Categoria 2",
   loading: true,
@@ -45,6 +47,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const [workspaceName, setWorkspaceName] = useState<string | null>(null);
   const [workspaceType, setWorkspaceType] = useState<string | null>(null);
   const [workspaceCreatedAt, setWorkspaceCreatedAt] = useState<string | null>(null);
+  const [joinCode, setJoinCode] = useState<string | null>(null);
   const [taskCat1Label, setTaskCat1Label] = useState("Categoria 1");
   const [taskCat2Label, setTaskCat2Label] = useState("Categoria 2");
   const [loading, setLoading] = useState(true);
@@ -80,7 +83,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
 
         const { data: ws } = await supabase
           .from("workspaces")
-          .select("name, type, created_at, task_cat1_label, task_cat2_label")
+          .select("name, type, created_at, task_cat1_label, task_cat2_label, join_code")
           .eq("id", wsId)
           .single();
 
@@ -88,6 +91,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
           setWorkspaceName(ws.name);
           setWorkspaceType(ws.type);
           setWorkspaceCreatedAt(ws.created_at);
+          setJoinCode((ws as any).join_code || null);
           const cat1Raw = (ws as any).task_cat1_label;
           // Auto-migrate old default "Categoria 1" → "Área"
           const cat1 = (!cat1Raw || cat1Raw === "Categoria 1") ? "Área" : cat1Raw;
@@ -226,7 +230,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
 
   return (
     <WorkspaceContext.Provider
-      value={{ workspaceId, workspaceName, workspaceType, workspaceCreatedAt, taskCat1Label, taskCat2Label, loading, hasPendingRequest, isAdmin: userRole === "admin", userRole, createWorkspace, updateCategoryLabels, refresh: fetchWorkspace }}
+      value={{ workspaceId, workspaceName, workspaceType, workspaceCreatedAt, joinCode, taskCat1Label, taskCat2Label, loading, hasPendingRequest, isAdmin: userRole === "admin", userRole, createWorkspace, updateCategoryLabels, refresh: fetchWorkspace }}
     >
       {children}
     </WorkspaceContext.Provider>

@@ -4,7 +4,7 @@ import { Drawer, DrawerContent, DrawerTrigger } from "@/components/ui/drawer";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 
-type View = "inicio" | "calendar" | "settings" | "publicacoes" | "dados" | "compromissos" | "trash" | "presencas" | "tarefas" | "whatsapp";
+type View = "inicio" | "calendar" | "settings" | "publicacoes" | "dados" | "compromissos" | "trash" | "presencas" | "tarefas";
 
 const TABS = [
   { view: "inicio" as View,      icon: Home,        label: "Início" },

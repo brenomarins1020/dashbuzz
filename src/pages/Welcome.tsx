@@ -16,7 +16,7 @@ type Step =
   | "type"
   | "name"
   | "admin-auth"
-  | "join-link"
+  | "join-code"
   | "join-auth";
 
 const labels: Record<OrgType, { question: string; prefix: string }> = {
@@ -35,7 +35,7 @@ const passwordRules = [
 
 const stepIndex: Record<Step, number> = {
   choose: 0, type: 1, name: 2, "admin-auth": 3,
-  "join-link": 1, "join-auth": 2,
+  "join-code": 1, "join-auth": 2,
 };
 
 export default function Welcome() {
@@ -58,8 +58,7 @@ export default function Welcome() {
   const [showPassword, setShowPassword] = useState(false);
 
   // Join workspace flow
-  const [joinLink, setJoinLink] = useState("");
-  const [joinToken, setJoinToken] = useState("");
+  const [joinCode, setJoinCode] = useState("");
   const [joinWsName, setJoinWsName] = useState("");
   const [joinUsername, setJoinUsername] = useState("");
   const [joinPassword, setJoinPassword] = useState("");
@@ -74,13 +73,13 @@ export default function Welcome() {
     }
   }, [authLoading, user, navigate]);
 
-  // Handle ?flow=join from Invite redirect
+  // Handle ?flow=join from pending redirects
   useEffect(() => {
     const flow = searchParams.get("flow");
-    const preToken = localStorage.getItem("pendingInviteToken");
+    const preCode = localStorage.getItem("pendingJoinCode");
     const preWsName = localStorage.getItem("pendingWorkspaceName");
-    if (flow === "join" && preToken) {
-      setJoinToken(preToken);
+    if (flow === "join" && preCode) {
+      setJoinCode(preCode);
       setJoinWsName(preWsName || "Workspace");
       setStep("join-auth");
     }
@@ -157,46 +156,23 @@ export default function Welcome() {
   };
 
   // ---- JOIN FLOW ----
-  const extractToken = (input: string): string | null => {
-    const trimmed = input.trim();
-    try {
-      const url = new URL(trimmed);
-      const t = url.searchParams.get("token");
-      if (t && t.length > 10) return t;
-    } catch {}
-    const uuidMatch = trimmed.match(
-      /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i
-    );
-    return uuidMatch ? uuidMatch[0] : null;
-  };
-
-  const handleJoinLinkContinue = async () => {
+  const handleJoinCodeContinue = async () => {
     setError("");
-    const token = extractToken(joinLink);
-    if (!token) {
-      setError("Link não reconhecido. Cole o link completo recebido pelo administrador.");
-      return;
-    }
+    if (joinCode.length !== 4) return;
     setLoading(true);
     try {
-      const { data, error: fetchErr } = await supabase
-        .from("workspaces")
-        .select("name, invite_token")
-        .eq("invite_token", token)
-        .single();
-
-      if (fetchErr || !data) {
-        setError("Link inválido ou expirado. Peça um novo ao administrador.");
+      const { data } = await supabase.rpc("get_workspace_by_code", { p_code: joinCode });
+      const result = data as any;
+      if (!result || result.error) {
+        setError("Código inválido. Verifique e tente novamente.");
         return;
       }
-
-      setJoinToken(token);
-      setJoinWsName(data.name || "Workspace");
-      localStorage.setItem("pendingInviteToken", token);
-      localStorage.setItem("pendingWorkspaceName", data.name || "Workspace");
+      setJoinWsName(result.workspace_name || "Workspace");
+      localStorage.setItem("pendingJoinCode", joinCode);
+      localStorage.setItem("pendingWorkspaceName", result.workspace_name || "Workspace");
       animateTo("join-auth");
     } catch {
-      setError("Link inválido. Cole o link completo recebido.");
+      setError("Erro ao verificar o código. Tente novamente.");
     } finally {
       setLoading(false);
     }
@@ -210,7 +186,7 @@ export default function Welcome() {
     setError("");
     setLoading(true);
     try {
-      const fakeEmail = `${joinUsername}__${joinToken.slice(0, 8)}@member.dashbuzz.app`;
+      const fakeEmail = `${joinUsername}__${joinCode}@member.dashbuzz.app`;
 
       // 1. Try to find existing user by username
       const { data: existingEmail } = await supabase.rpc("get_email_by_username", {
@@ -228,16 +204,13 @@ export default function Welcome() {
           setLoading(false);
           return;
         }
-
         localStorage.setItem("memberUsername", joinUsername);
-
-        // Check if already a member of this workspace
-        const { data: result } = await supabase.rpc("request_workspace_access", {
-          p_invite_token: joinToken,
+        const { data: result } = await supabase.rpc("request_access_by_code", {
+          p_code: joinCode,
           p_requester_name: joinUsername,
         });
         const r = result as any;
-        if (r?.status === "already_member") {
+        if (r?.error === "already_member") {
           navigate("/", { replace: true });
         } else {
           navigate("/pending-approval", { replace: true });
@@ -250,16 +223,14 @@ export default function Welcome() {
           options: { data: { display_name: joinUsername } },
         });
         if (signupErr) throw signupErr;
-
         localStorage.setItem("memberUsername", joinUsername);
-
         if (data.session) {
-          const { data: result } = await supabase.rpc("request_workspace_access", {
-            p_invite_token: joinToken,
+          const { data: result } = await supabase.rpc("request_access_by_code", {
+            p_code: joinCode,
             p_requester_name: joinUsername,
           });
           const r = result as any;
-          if (r?.status === "already_member") {
+          if (r?.error === "already_member") {
             navigate("/", { replace: true });
           } else {
             navigate("/pending-approval", { replace: true });
@@ -267,7 +238,7 @@ export default function Welcome() {
         }
       }
 
-      localStorage.removeItem("pendingInviteToken");
+      localStorage.removeItem("pendingJoinCode");
       localStorage.removeItem("pendingWorkspaceName");
     } catch (err: any) {
       setError(err.message || "Erro ao acessar. Tente novamente.");
@@ -334,8 +305,8 @@ export default function Welcome() {
               {
                 icon: Users,
                 title: "Entrar em um workspace",
-                sub: "Use o link de convite recebido",
-                action: () => animateTo("join-link"),
+                sub: "Use o código de 4 dígitos",
+                action: () => animateTo("join-code"),
               },
             ].map((opt) => (
               <button
@@ -474,24 +445,27 @@ export default function Welcome() {
           </form>
         )}
 
-        {/* ── STEP: JOIN LINK ── */}
-        {step === "join-link" && (
+        {/* ── STEP: JOIN CODE ── */}
+        {step === "join-code" && (
           <div className="glass-card-auth p-6 space-y-4">
             <div className="text-center mb-2">
-              <p className="text-sm font-semibold text-white" style={dmSans}>Cole o link de convite</p>
-              <p className="text-xs text-white/40 mt-1" style={dmSans}>Peça ao administrador o link do workspace</p>
+              <p className="text-sm font-semibold text-white" style={dmSans}>Digite o código do workspace</p>
+              <p className="text-xs text-white/40 mt-1" style={dmSans}>Peça o código de 4 dígitos ao administrador</p>
             </div>
             <input
-              type="url"
-              placeholder="https://dashbuz.lovable.app/invite/..."
-              value={joinLink}
-              onChange={(e) => { setJoinLink(e.target.value); setError(""); }}
+              type="text"
+              inputMode="numeric"
+              maxLength={4}
+              pattern="[0-9]{4}"
+              placeholder="0000"
+              value={joinCode}
+              onChange={(e) => { setJoinCode(e.target.value.replace(/\D/g, "").slice(0, 4)); setError(""); }}
               autoFocus
-              className="gold-input-focus w-full h-10 rounded-[10px] px-3 text-sm"
+              className="gold-input-focus w-full h-16 rounded-[10px] px-3 text-3xl font-mono tracking-[0.5em] text-center"
               style={dmSans}
             />
             <ErrorBanner error={error} />
-            <PrimaryButton onClick={handleJoinLinkContinue} disabled={!joinLink.trim() || loading}>
+            <PrimaryButton onClick={handleJoinCodeContinue} disabled={joinCode.length !== 4 || loading}>
               {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
               Continuar <ArrowRight className="h-4 w-4" />
             </PrimaryButton>
@@ -542,7 +516,7 @@ export default function Welcome() {
               {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
               Acessar
             </PrimaryButton>
-            <BackButton onClick={() => animateTo("join-link")} />
+            <BackButton onClick={() => animateTo("join-code")} />
           </form>
         )}
       </div>
