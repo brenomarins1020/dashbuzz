@@ -87,6 +87,10 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
           .eq("id", wsId)
           .single();
 
+        // Fallback via RPC (bypasses any client-side type filtering)
+        supabase.rpc("get_my_join_code" as any, { p_workspace_id: wsId })
+          .then(({ data: code }) => { if (code) setJoinCode(code as string); });
+
         if (ws) {
           setWorkspaceName(ws.name);
           setWorkspaceType(ws.type);
