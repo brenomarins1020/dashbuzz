@@ -11,6 +11,7 @@ interface WorkspaceContextType {
   taskCat1Label: string;
   taskCat2Label: string;
   loading: boolean;
+  hasPendingRequest: boolean;
   isAdmin: boolean;
   userRole: string;
   createWorkspace: (type: string, name: string) => Promise<string>;
@@ -26,6 +27,7 @@ const WorkspaceContext = createContext<WorkspaceContextType>({
   taskCat1Label: "Categoria 1",
   taskCat2Label: "Categoria 2",
   loading: true,
+  hasPendingRequest: false,
   isAdmin: false,
   userRole: "member",
   createWorkspace: async () => "",
@@ -46,6 +48,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const [taskCat1Label, setTaskCat1Label] = useState("Categoria 1");
   const [taskCat2Label, setTaskCat2Label] = useState("Categoria 2");
   const [loading, setLoading] = useState(true);
+  const [hasPendingRequest, setHasPendingRequest] = useState(false);
   const [userRole, setUserRole] = useState("member");
   const creatingRef = useRef(false);
 
@@ -58,6 +61,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         setWorkspaceName(null);
         setWorkspaceType(null);
         setWorkspaceCreatedAt(null);
+        setHasPendingRequest(false);
         return;
       }
 
@@ -72,6 +76,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         const role = (memberships[0] as any).role || "member";
         setWorkspaceId(wsId);
         setUserRole(role);
+        setHasPendingRequest(false);
 
         const { data: ws } = await supabase
           .from("workspaces")
@@ -102,6 +107,21 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       setWorkspaceName(null);
       setWorkspaceType(null);
       setWorkspaceCreatedAt(null);
+
+      // Check if user has a pending access request
+      const { data: pendingMember } = await (supabase as any)
+        .from("workspace_members")
+        .select("id, status")
+        .eq("user_id", user.id)
+        .in("status", ["pending", "rejected"])
+        .limit(1);
+
+      if (pendingMember && pendingMember.length > 0) {
+        setHasPendingRequest(true);
+        return;
+      }
+
+      setHasPendingRequest(false);
 
       const obType = localStorage.getItem("onboardingType");
       const obName = localStorage.getItem("onboardingName");
@@ -201,7 +221,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
 
   return (
     <WorkspaceContext.Provider
-      value={{ workspaceId, workspaceName, workspaceType, workspaceCreatedAt, taskCat1Label, taskCat2Label, loading, isAdmin: userRole === "admin", userRole, createWorkspace, updateCategoryLabels, refresh: fetchWorkspace }}
+      value={{ workspaceId, workspaceName, workspaceType, workspaceCreatedAt, taskCat1Label, taskCat2Label, loading, hasPendingRequest, isAdmin: userRole === "admin", userRole, createWorkspace, updateCategoryLabels, refresh: fetchWorkspace }}
     >
       {children}
     </WorkspaceContext.Provider>

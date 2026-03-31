@@ -24,6 +24,7 @@ const WorkspaceConfigPanel = lazy(() => import("@/components/WorkspaceConfigPane
 const InicioPanel = lazy(() => import("@/components/InicioPanel").then(m => ({ default: m.InicioPanel })));
 // WhatsappAgente removed — file not available in production build
 const TasksPanelNew = lazy(() => import("@/components/TasksPanelNew").then(m => ({ default: m.TasksPanelNew })));
+const MembersPanel = lazy(() => import("@/components/MembersPanel").then(m => ({ default: m.MembersPanel })));
 
 import { useTheme } from "@/hooks/useTheme";
 import { useAuth } from "@/hooks/useAuth";
@@ -443,6 +444,7 @@ const Index = () => {
                 <h2 className="text-lg font-bold font-heading tracking-wide uppercase">Configurações</h2>
                 <p className="text-sm text-muted-foreground mt-1">Gerencie preferências e dados do app.</p>
               </div>
+              {isAdmin && <MembersPanel />}
               <SettingsPanel theme={theme} toggleTheme={toggleTheme} />
               {isAdmin && <WorkspaceConfigPanel />}
               {isAdmin && <AdminAnnouncementsPanel />}

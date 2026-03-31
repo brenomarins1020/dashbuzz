@@ -11,6 +11,7 @@ import Welcome from "./pages/Welcome";
 import Onboarding from "./pages/Onboarding";
 import ResetPassword from "./pages/ResetPassword";
 import SetPassword from "./pages/SetPassword";
+import PendingApproval from "./pages/PendingApproval";
 import NotFound from "./pages/NotFound";
 import { AnnouncementModal } from "@/components/AnnouncementModal";
 import { WorkspaceConfigProvider } from "@/hooks/useWorkspaceConfigProvider";
@@ -28,7 +29,7 @@ const queryClient = new QueryClient({
 
 function AuthGuard({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
-  const { workspaceId, loading: wsLoading } = useWorkspace();
+  const { workspaceId, loading: wsLoading, hasPendingRequest } = useWorkspace();
 
   if (loading || wsLoading) {
     return (
@@ -44,6 +45,9 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
   }
 
   if (!workspaceId) {
+    if (hasPendingRequest) {
+      return <Navigate to="/pending-approval" replace />;
+    }
     return <Navigate to="/welcome" replace />;
   }
 
@@ -64,6 +68,7 @@ const App = () => (
             <Route path="/login" element={<Navigate to="/auth?mode=login" replace />} />
             <Route path="/reset-password" element={<ResetPassword />} />
             <Route path="/set-password" element={<SetPassword />} />
+            <Route path="/pending-approval" element={<PendingApproval />} />
             <Route
               path="/"
               element={
