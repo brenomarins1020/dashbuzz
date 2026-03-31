@@ -18,12 +18,11 @@ const MORE_VIEWS: View[] = ["compromissos", "presencas", "settings"];
 interface MobileBottomNavProps {
   view: View;
   changeView: (v: View) => void;
-  pendingCount?: number;
   isAdmin?: boolean;
   onSignOut?: () => void;
 }
 
-export function MobileBottomNav({ view, changeView, pendingCount = 0, isAdmin = false, onSignOut }: MobileBottomNavProps) {
+export function MobileBottomNav({ view, changeView, isAdmin = false, onSignOut }: MobileBottomNavProps) {
   const [moreOpen, setMoreOpen] = useState(false);
 
   const isMoreActive = MORE_VIEWS.includes(view);
@@ -70,14 +69,7 @@ export function MobileBottomNav({ view, changeView, pendingCount = 0, isAdmin = 
               className="flex-1 flex flex-col items-center justify-center gap-0.5 relative"
               style={{ color: isMoreActive ? activeColor : inactiveColor, WebkitTapHighlightColor: "transparent" }}
             >
-              <div className="relative">
-                <Menu className="h-[22px] w-[22px]" />
-                {pendingCount > 0 && (
-                  <span className="absolute -top-1.5 -right-2 h-4 min-w-[16px] rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center px-1">
-                    {pendingCount}
-                  </span>
-                )}
-              </div>
+              <Menu className="h-[22px] w-[22px]" />
               <span className="text-[10px] font-medium leading-none">Mais</span>
             </button>
           </DrawerTrigger>

@@ -8,11 +8,9 @@ interface WorkspaceContextType {
   workspaceName: string | null;
   workspaceType: string | null;
   workspaceCreatedAt: string | null;
-  joinCode: string | null;
   taskCat1Label: string;
   taskCat2Label: string;
   loading: boolean;
-  hasPendingRequest: boolean;
   isAdmin: boolean;
   userRole: string;
   createWorkspace: (type: string, name: string) => Promise<string>;
@@ -25,11 +23,9 @@ const WorkspaceContext = createContext<WorkspaceContextType>({
   workspaceName: null,
   workspaceType: null,
   workspaceCreatedAt: null,
-  joinCode: null,
   taskCat1Label: "Categoria 1",
   taskCat2Label: "Categoria 2",
   loading: true,
-  hasPendingRequest: false,
   isAdmin: false,
   userRole: "member",
   createWorkspace: async () => "",
@@ -47,11 +43,9 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const [workspaceName, setWorkspaceName] = useState<string | null>(null);
   const [workspaceType, setWorkspaceType] = useState<string | null>(null);
   const [workspaceCreatedAt, setWorkspaceCreatedAt] = useState<string | null>(null);
-  const [joinCode, setJoinCode] = useState<string | null>(null);
   const [taskCat1Label, setTaskCat1Label] = useState("Categoria 1");
   const [taskCat2Label, setTaskCat2Label] = useState("Categoria 2");
   const [loading, setLoading] = useState(true);
-  const [hasPendingRequest, setHasPendingRequest] = useState(false);
   const [userRole, setUserRole] = useState("member");
   const creatingRef = useRef(false);
 
@@ -64,7 +58,6 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         setWorkspaceName(null);
         setWorkspaceType(null);
         setWorkspaceCreatedAt(null);
-        setHasPendingRequest(false);
         return;
       }
 
@@ -79,89 +72,18 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         const role = (memberships[0] as any).role || "member";
         setWorkspaceId(wsId);
         setUserRole(role);
-        setHasPendingRequest(false);
 
-        // Fetch workspace basic data (name, type, created_at, labels)
         const { data: ws } = await supabase
           .from("workspaces")
           .select("*")
           .eq("id", wsId)
           .single();
 
-        // Get join code — try multiple methods with full error logging
-        let finalCode: string | null = null;
-
-        // Method 1: RPC
-        try {
-          const { data: rpcData, error: rpcErr } = await supabase.rpc("get_join_code_for_workspace" as any, { ws_id: wsId });
-          console.log("[JOIN_CODE] RPC:", rpcData, rpcErr);
-          if (!rpcErr && typeof rpcData === "string") finalCode = rpcData;
-        } catch (e) { console.log("[JOIN_CODE] RPC exception:", e); }
-
-        // Method 2: Direct table query
-        if (!finalCode) {
-          try {
-            const { data: tbl, error: tblErr } = await (supabase as any)
-              .from("workspace_codes").select("code").eq("workspace_id", wsId).single();
-            console.log("[JOIN_CODE] Table:", tbl, tblErr);
-            if (!tblErr && tbl?.code) finalCode = tbl.code;
-          } catch (e) { console.log("[JOIN_CODE] Table exception:", e); }
-        }
-
-        // Method 3: Direct fetch to REST API (bypasses JS client entirely)
-        if (!finalCode) {
-          try {
-            const sess = await supabase.auth.getSession();
-            const token = sess.data.session?.access_token;
-            const baseUrl = import.meta.env.VITE_SUPABASE_URL;
-            const apiKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
-
-            // Try RPC via raw fetch
-            const rpcResp = await fetch(`${baseUrl}/rest/v1/rpc/get_join_code_for_workspace`, {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                "apikey": apiKey,
-                "Authorization": `Bearer ${token}`,
-              },
-              body: JSON.stringify({ ws_id: wsId }),
-            });
-            const rpcText = await rpcResp.text();
-            console.log("[JOIN_CODE] Raw RPC fetch:", rpcResp.status, rpcText);
-            if (rpcResp.ok && rpcText && rpcText !== "null") {
-              finalCode = rpcText.replace(/^"|"$/g, "");
-            }
-
-            // Try table via raw fetch
-            if (!finalCode) {
-              const tblResp = await fetch(
-                `${baseUrl}/rest/v1/workspace_codes?workspace_id=eq.${wsId}&select=code`,
-                { headers: { "apikey": apiKey, "Authorization": `Bearer ${token}` } }
-              );
-              const tblJson = await tblResp.json();
-              console.log("[JOIN_CODE] Raw table fetch:", tblResp.status, tblJson);
-              if (Array.isArray(tblJson) && tblJson[0]?.code) {
-                finalCode = tblJson[0].code;
-              }
-            }
-          } catch (e) { console.log("[JOIN_CODE] Raw fetch exception:", e); }
-        }
-
-        // Method 4: join_code column on workspaces (if PostgREST knows about it)
-        if (!finalCode && (ws as any)?.join_code) {
-          finalCode = (ws as any).join_code;
-          console.log("[JOIN_CODE] From column:", finalCode);
-        }
-
-        console.log("[JOIN_CODE] FINAL:", finalCode);
-        setJoinCode(finalCode);
-
         if (ws) {
           setWorkspaceName(ws.name);
           setWorkspaceType(ws.type);
           setWorkspaceCreatedAt(ws.created_at);
           const cat1Raw = (ws as any).task_cat1_label;
-          // Auto-migrate old default "Categoria 1" → "Área"
           const cat1 = (!cat1Raw || cat1Raw === "Categoria 1") ? "Área" : cat1Raw;
           if (!cat1Raw || cat1Raw === "Categoria 1") {
             supabase.from("workspaces").update({ task_cat1_label: "Área" } as any).eq("id", wsId).then(() => {});
@@ -181,20 +103,6 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       setWorkspaceType(null);
       setWorkspaceCreatedAt(null);
 
-      const { data: pendingMember } = await (supabase as any)
-        .from("workspace_members")
-        .select("id, status")
-        .eq("user_id", user.id)
-        .in("status", ["pending", "rejected"])
-        .limit(1);
-
-      if (pendingMember && pendingMember.length > 0) {
-        setHasPendingRequest(true);
-        return;
-      }
-
-      setHasPendingRequest(false);
-
       const obType = localStorage.getItem("onboardingType");
       const obName = localStorage.getItem("onboardingName");
       if (obType && obName && !creatingRef.current) {
@@ -203,17 +111,13 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
           const { data: wsId, error: rpcErr } = await supabase
             .rpc("create_workspace_with_membership", { _type: obType, _name: obName });
           if (!rpcErr && wsId) {
-            // Re-fetch para confirmar o papel "admin" diretamente do banco
-            // (creatingRef=true garante que não haverá loop infinito)
             await fetchWorkspace();
           } else {
-            // Don't retry on error — clear onboarding data to stop loop
             console.error("Auto-create workspace failed:", rpcErr);
           }
         } catch (e) {
           console.error("Auto-create workspace failed:", e);
         }
-        // Never reset creatingRef to prevent infinite retry loops
       }
     } finally {
       setLoading(false);
@@ -241,7 +145,6 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
           filter: `user_id=eq.${user.id}`,
         },
         () => {
-          // User was removed — sign out and redirect
           supabase.auth.signOut().then(() => {
             window.location.href = "/welcome";
           });
@@ -280,7 +183,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     setWorkspaceId(wsId);
     setWorkspaceName(name);
     setWorkspaceType(type);
-    setUserRole("admin"); // criador SEMPRE é admin
+    setUserRole("admin");
     localStorage.setItem("onboardingName", name);
     localStorage.setItem("onboardingType", type);
 
@@ -298,7 +201,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
 
   return (
     <WorkspaceContext.Provider
-      value={{ workspaceId, workspaceName, workspaceType, workspaceCreatedAt, joinCode, taskCat1Label, taskCat2Label, loading, hasPendingRequest, isAdmin: userRole === "admin", userRole, createWorkspace, updateCategoryLabels, refresh: fetchWorkspace }}
+      value={{ workspaceId, workspaceName, workspaceType, workspaceCreatedAt, taskCat1Label, taskCat2Label, loading, isAdmin: userRole === "admin", userRole, createWorkspace, updateCategoryLabels, refresh: fetchWorkspace }}
     >
       {children}
     </WorkspaceContext.Provider>

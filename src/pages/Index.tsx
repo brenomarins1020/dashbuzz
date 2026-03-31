@@ -9,8 +9,6 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 
 import { MarketingCalendar } from "@/components/MarketingCalendar";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
 
 // Lazy-loaded panels
 
@@ -26,14 +24,11 @@ const WorkspaceConfigPanel = lazy(() => import("@/components/WorkspaceConfigPane
 const InicioPanel = lazy(() => import("@/components/InicioPanel").then(m => ({ default: m.InicioPanel })));
 // WhatsappAgente removed — file not available in production build
 const TasksPanelNew = lazy(() => import("@/components/TasksPanelNew").then(m => ({ default: m.TasksPanelNew })));
-const InvitePanel = lazy(() => import("@/components/InvitePanel").then(m => ({ default: m.InvitePanel })));
-const ApprovalsPanel = lazy(() => import("@/components/ApprovalsPanel").then(m => ({ default: m.ApprovalsPanel })));
 
 import { useTheme } from "@/hooks/useTheme";
 import { useAuth } from "@/hooks/useAuth";
 import { useWorkspace } from "@/hooks/useWorkspace";
 import { CalendarDays, LayoutDashboard, Settings, BookOpen, BarChart3, ClipboardCheck, Trash2, LogOut, ChevronDown, User, Users, ListChecks, Home } from "lucide-react";
-import { InvitePopover } from "@/components/InvitePopover";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -161,21 +156,6 @@ const Index = () => {
     ? `@${user?.email?.split("__")[0] || "usuário"}`
     : user?.email?.split("@")[0] || "Conta";
 
-  // Pending approvals count for mobile badge
-  const { data: pendingCount = 0 } = useQuery({
-    queryKey: ["pending-approvals-count", workspaceId],
-    queryFn: async () => {
-      if (!workspaceId || !isAdmin) return 0;
-      const { count } = await supabase
-        .from("workspace_join_requests")
-        .select("id", { count: "exact", head: true })
-        .eq("workspace_id", workspaceId)
-        .eq("status", "pending");
-      return count || 0;
-    },
-    enabled: !!workspaceId && isAdmin,
-    staleTime: 60_000,
-  });
 
   const loading = false;
 
@@ -325,7 +305,6 @@ const Index = () => {
             {/* Right: Gestão + Config */}
             <div className="flex-1 flex items-center justify-end">
               <div className="h-6 mx-4" style={{ borderLeft: "1px solid rgba(255,255,255,0.12)" }} />
-              {isAdmin && <InvitePopover />}
               {isAdmin && (
                 <button
                   ref={(el) => { desktopNavRefs.current["presencas"] = el; }}
@@ -415,7 +394,7 @@ const Index = () => {
 
       {/* Mobile header + bottom nav */}
       <MobileHeader viewTitle={VIEW_LABELS[view]} />
-      <MobileBottomNav view={view} changeView={changeView} pendingCount={pendingCount} isAdmin={isAdmin} onSignOut={signOut} />
+      <MobileBottomNav view={view} changeView={changeView} isAdmin={isAdmin} onSignOut={signOut} />
 
       {/* Main content */}
       <main
@@ -464,8 +443,6 @@ const Index = () => {
                 <h2 className="text-lg font-bold font-heading tracking-wide uppercase">Configurações</h2>
                 <p className="text-sm text-muted-foreground mt-1">Gerencie preferências e dados do app.</p>
               </div>
-              {isAdmin && <InvitePanel />}
-              {isAdmin && <ApprovalsPanel />}
               <SettingsPanel theme={theme} toggleTheme={toggleTheme} />
               {isAdmin && <WorkspaceConfigPanel />}
               {isAdmin && <AdminAnnouncementsPanel />}

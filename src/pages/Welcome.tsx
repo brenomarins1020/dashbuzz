@@ -1,9 +1,9 @@
 import { useState, useEffect } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import {
-  Trophy, Briefcase, Globe, ArrowRight, LogIn, UserPlus, Users,
+  Trophy, Briefcase, Globe, ArrowRight, UserPlus, LogIn,
   ChevronRight, AlertCircle, CheckCircle2, XCircle, Loader2,
-  AtSign, Lock, Eye, EyeOff, CalendarDays,
+  Eye, EyeOff,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { AuthLayout } from "@/components/AuthLayout";
@@ -11,13 +11,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
 type OrgType = "atletica" | "ej" | "outros";
-type Step =
-  | "choose"
-  | "type"
-  | "name"
-  | "admin-auth"
-  | "join-code"
-  | "join-auth";
+type Step = "choose" | "type" | "name" | "admin-auth";
 
 const labels: Record<OrgType, { question: string; prefix: string }> = {
   ej: { question: "Qual o nome da sua Empresa Júnior?", prefix: "Empresa Júnior" },
@@ -35,12 +29,10 @@ const passwordRules = [
 
 const stepIndex: Record<Step, number> = {
   choose: 0, type: 1, name: 2, "admin-auth": 3,
-  "join-code": 1, "join-auth": 2,
 };
 
 export default function Welcome() {
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
   const { user, loading: authLoading } = useAuth();
 
   const [step, setStep] = useState<Step>("choose");
@@ -57,12 +49,6 @@ export default function Welcome() {
   const [adminConfirm, setAdminConfirm] = useState("");
   const [showPassword, setShowPassword] = useState(false);
 
-  // Join workspace flow
-  const [joinCode, setJoinCode] = useState("");
-  const [joinWsName, setJoinWsName] = useState("");
-  const [joinUsername, setJoinUsername] = useState("");
-  const [joinPassword, setJoinPassword] = useState("");
-
   // Shared
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -72,18 +58,6 @@ export default function Welcome() {
       navigate("/", { replace: true });
     }
   }, [authLoading, user, navigate]);
-
-  // Handle ?flow=join from pending redirects
-  useEffect(() => {
-    const flow = searchParams.get("flow");
-    const preCode = localStorage.getItem("pendingJoinCode");
-    const preWsName = localStorage.getItem("pendingWorkspaceName");
-    if (flow === "join" && preCode) {
-      setJoinCode(preCode);
-      setJoinWsName(preWsName || "Workspace");
-      setStep("join-auth");
-    }
-  }, [searchParams]);
 
   const animateTo = (next: Step, cb?: () => void) => {
     const goingForward = (stepIndex[next] ?? 0) >= (stepIndex[step] ?? 0);
@@ -133,15 +107,12 @@ export default function Welcome() {
       });
       if (signupErr) throw signupErr;
       if (data.session) {
-        // Chama o RPC diretamente — o contexto useWorkspace ainda tem user=null
-        // pois onAuthStateChange é assíncrono. O RPC usa auth.uid() server-side.
         try {
           await supabase.rpc("create_workspace_with_membership", {
             _type: orgType || "ej",
             _name: orgName.trim(),
           });
         } catch (wsErr) {
-          // Se falhar (ex: workspace já existe), o fetchWorkspace vai resolver via membership
           console.error("Workspace creation error:", wsErr);
         }
         navigate("/", { replace: true });
@@ -155,101 +126,6 @@ export default function Welcome() {
     }
   };
 
-  // ---- JOIN FLOW ----
-  const handleJoinCodeContinue = async () => {
-    setError("");
-    if (joinCode.length !== 4) return;
-    setLoading(true);
-    try {
-      const { data, error: rpcErr } = await supabase.rpc("get_workspace_by_code", { p_code: joinCode });
-      if (rpcErr) throw rpcErr;
-      const rows = data as any[];
-      const result = rows?.[0];
-      if (!result) {
-        setError("Código inválido. Verifique e tente novamente.");
-        return;
-      }
-      const wsName = result.name || "Workspace";
-      setJoinWsName(wsName);
-      localStorage.setItem("pendingJoinCode", joinCode);
-      localStorage.setItem("pendingWorkspaceName", wsName);
-      animateTo("join-auth");
-    } catch {
-      setError("Erro ao verificar o código. Tente novamente.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const usernameValid = /^[a-z0-9_]{3,}$/.test(joinUsername);
-
-  const handleJoinSignup = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!usernameValid || joinPassword.length < 8) return;
-    setError("");
-    setLoading(true);
-    try {
-      const fakeEmail = `${joinUsername}__${joinCode}@member.dashbuzz.app`;
-
-      // 1. Try to find existing user by username
-      const { data: existingEmail } = await supabase.rpc("get_email_by_username", {
-        p_username: joinUsername,
-      });
-
-      if (existingEmail) {
-        // User exists — try to login
-        const { error: loginErr } = await supabase.auth.signInWithPassword({
-          email: existingEmail as string,
-          password: joinPassword,
-        });
-        if (loginErr) {
-          setError("Senha incorreta. Tente novamente.");
-          setLoading(false);
-          return;
-        }
-        localStorage.setItem("memberUsername", joinUsername);
-        const { data: result } = await supabase.rpc("request_access_by_code", {
-          p_code: joinCode,
-          p_requester_name: joinUsername,
-        });
-        const r = result as any;
-        if (r?.error === "already_member") {
-          navigate("/", { replace: true });
-        } else {
-          navigate("/pending-approval", { replace: true });
-        }
-      } else {
-        // New user — create account
-        const { data, error: signupErr } = await supabase.auth.signUp({
-          email: fakeEmail,
-          password: joinPassword,
-          options: { data: { display_name: joinUsername } },
-        });
-        if (signupErr) throw signupErr;
-        localStorage.setItem("memberUsername", joinUsername);
-        if (data.session) {
-          const { data: result } = await supabase.rpc("request_access_by_code", {
-            p_code: joinCode,
-            p_requester_name: joinUsername,
-          });
-          const r = result as any;
-          if (r?.error === "already_member") {
-            navigate("/", { replace: true });
-          } else {
-            navigate("/pending-approval", { replace: true });
-          }
-        }
-      }
-
-      localStorage.removeItem("pendingJoinCode");
-      localStorage.removeItem("pendingWorkspaceName");
-    } catch (err: any) {
-      setError(err.message || "Erro ao acessar. Tente novamente.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
   // ---- HEADLINE ----
   const headline = (() => {
     if (step === "admin-auth") return orgName.trim() || "DASHBUZZ";
@@ -257,7 +133,6 @@ export default function Welcome() {
       const prefix = labels[orgType].prefix;
       return `${prefix ? prefix + " " : ""}${orgName.trim()}`;
     }
-    if (step === "join-auth") return joinWsName;
     return "DASHBUZZ";
   })();
 
@@ -291,7 +166,6 @@ export default function Welcome() {
               Como deseja entrar?
             </p>
 
-            {/* Option cards */}
             {[
               {
                 icon: UserPlus,
@@ -304,12 +178,6 @@ export default function Welcome() {
                 title: "Já tenho um workspace",
                 sub: "Entre com seu usuário e senha",
                 action: () => navigate("/auth?mode=login"),
-              },
-              {
-                icon: Users,
-                title: "Entrar em um workspace",
-                sub: "Use o código de 4 dígitos",
-                action: () => animateTo("join-code"),
               },
             ].map((opt) => (
               <button
@@ -445,81 +313,6 @@ export default function Welcome() {
               Criar conta
             </PrimaryButton>
             <BackButton onClick={() => animateTo("name")} />
-          </form>
-        )}
-
-        {/* ── STEP: JOIN CODE ── */}
-        {step === "join-code" && (
-          <div className="glass-card-auth p-6 space-y-4">
-            <div className="text-center mb-2">
-              <p className="text-sm font-semibold text-white" style={dmSans}>Digite o código do workspace</p>
-              <p className="text-xs text-white/40 mt-1" style={dmSans}>Peça o código de 4 dígitos ao administrador</p>
-            </div>
-            <input
-              type="text"
-              inputMode="numeric"
-              maxLength={4}
-              pattern="[0-9]{4}"
-              placeholder="0000"
-              value={joinCode}
-              onChange={(e) => { setJoinCode(e.target.value.replace(/\D/g, "").slice(0, 4)); setError(""); }}
-              autoFocus
-              className="gold-input-focus w-full h-16 rounded-[10px] px-3 text-3xl font-mono tracking-[0.5em] text-center"
-              style={dmSans}
-            />
-            <ErrorBanner error={error} />
-            <PrimaryButton onClick={handleJoinCodeContinue} disabled={joinCode.length !== 4 || loading}>
-              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-              Continuar <ArrowRight className="h-4 w-4" />
-            </PrimaryButton>
-            <BackButton onClick={() => animateTo("choose")} />
-          </div>
-        )}
-
-        {/* ── STEP: JOIN AUTH (username + password in one step) ── */}
-        {step === "join-auth" && (
-          <form onSubmit={handleJoinSignup} className="glass-card-auth p-6 space-y-4">
-            <div className="text-center mb-2">
-              <p className="text-sm font-semibold text-white" style={dmSans}>Crie sua conta</p>
-              <p className="text-xs text-white/40 mt-1" style={dmSans}>
-                Entrando em {joinWsName}
-              </p>
-            </div>
-
-            {/* Username */}
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-white/70" style={dmSans}>Nome de usuário</label>
-              <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40 text-sm" style={dmSans}>@</span>
-                <input
-                  type="text"
-                  placeholder="seunome"
-                  value={joinUsername}
-                  onChange={(e) => setJoinUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ""))}
-                  autoFocus
-                  className="gold-input-focus w-full h-10 rounded-[10px] pl-7 pr-3 text-sm"
-                  style={dmSans}
-                />
-              </div>
-              <p className="text-xs text-white/35 leading-relaxed" style={dmSans}>
-                Coloque seu nome_sobrenome. <strong className="text-white/50">Guarde-o bem</strong>, pois você precisará dele para entrar novamente.
-              </p>
-              {joinUsername.length > 0 && !usernameValid && (
-                <p className="text-xs" style={{ color: "#f87171", ...dmSans }}>Mínimo 3 caracteres (letras, números, _)</p>
-              )}
-            </div>
-
-            {/* Password */}
-            <InputField id="join-pass" label="Senha (mín. 8 caracteres)" type="password" placeholder="••••••••"
-              value={joinPassword} onChange={setJoinPassword} />
-
-            <ErrorBanner error={error} />
-
-            <PrimaryButton type="submit" disabled={loading || !usernameValid || joinPassword.length < 8}>
-              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-              Acessar
-            </PrimaryButton>
-            <BackButton onClick={() => animateTo("join-code")} />
           </form>
         )}
       </div>
