@@ -121,14 +121,14 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       setWorkspaceType(null);
       setWorkspaceCreatedAt(null);
 
-      const { data: joinRequests } = await supabase
-        .from("workspace_join_requests")
+      const { data: pendingMember } = await (supabase as any)
+        .from("workspace_members")
         .select("id, status")
         .eq("user_id", user.id)
         .in("status", ["pending", "rejected"])
         .limit(1);
 
-      if (joinRequests && joinRequests.length > 0) {
+      if (pendingMember && pendingMember.length > 0) {
         setHasPendingRequest(true);
         return;
       }

@@ -25,12 +25,12 @@ export function ApprovalsPanel() {
     queryKey: ["workspace-join-requests", workspaceId],
     enabled: !!workspaceId,
     queryFn: async () => {
-      const { data } = await supabase
-        .from("workspace_join_requests")
+      const { data } = await (supabase as any)
+        .from("workspace_members")
         .select("*")
         .eq("workspace_id", workspaceId!)
         .eq("status", "pending")
-        .order("requested_at", { ascending: false });
+        .order("created_at", { ascending: false });
       return data || [];
     },
   });
@@ -41,7 +41,7 @@ export function ApprovalsPanel() {
       .channel("join-requests-realtime")
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "workspace_join_requests", filter: `workspace_id=eq.${workspaceId}` },
+        { event: "*", schema: "public", table: "workspace_members", filter: `workspace_id=eq.${workspaceId}` },
         () => {
           qc.invalidateQueries({ queryKey: ["workspace-join-requests", workspaceId] });
         }
@@ -62,7 +62,7 @@ export function ApprovalsPanel() {
       if (error) throw error;
       qc.invalidateQueries({ queryKey: ["workspace-join-requests", workspaceId] });
       qc.invalidateQueries({ queryKey: ["team-members"] });
-      toast.success(`Acesso aprovado para ${req.requester_name} como ${role === "admin" ? "Admin" : "Membro"}`);
+      toast.success(`Acesso aprovado para ${req.display_name} como ${role === "admin" ? "Admin" : "Membro"}`);
     } catch (err: any) {
       toast.error(err.message || "Erro ao aprovar");
     } finally {
@@ -77,7 +77,7 @@ export function ApprovalsPanel() {
       const { error } = await supabase.rpc("reject_join_request", { request_id: req.id });
       if (error) throw error;
       qc.invalidateQueries({ queryKey: ["workspace-join-requests", workspaceId] });
-      toast.success(`${req.requester_name} foi rejeitado(a)`);
+      toast.success(`${req.display_name} foi rejeitado(a)`);
     } catch (err: any) {
       toast.error(err.message || "Erro ao rejeitar");
     } finally {
@@ -148,14 +148,12 @@ export function ApprovalsPanel() {
                     <div key={req.id} className="rounded-lg border border-border px-3 py-3 space-y-2.5">
                       <div className="flex items-start justify-between">
                         <div className="min-w-0 flex-1">
-                          <p className="text-sm font-medium truncate">{req.requester_name}</p>
+                          <p className="text-sm font-medium truncate">{req.display_name}</p>
                           <p className="text-xs text-muted-foreground truncate">
-                            {req.email?.includes("@member.dashbuzz.app")
-                              ? `@${req.email.split("__")[0]}`
-                              : req.email}
+                            @{req.display_name}
                           </p>
                           <p className="text-xs text-muted-foreground/60">
-                            {format(new Date(req.requested_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+                            {format(new Date(req.created_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
                           </p>
                         </div>
                         <div className="flex items-center gap-1.5 ml-3 shrink-0">

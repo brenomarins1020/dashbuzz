@@ -16,15 +16,15 @@ export default function PendingApproval() {
   // Fetch initial workspace name and status
   useEffect(() => {
     if (!user) return;
-    supabase
-      .from("workspace_join_requests")
+    (supabase as any)
+      .from("workspace_members")
       .select("workspace_id, status")
       .eq("user_id", user.id)
       .in("status", ["pending", "rejected"])
-      .order("requested_at", { ascending: false })
+      .order("created_at", { ascending: false })
       .limit(1)
       .single()
-      .then(async ({ data }) => {
+      .then(async ({ data }: any) => {
         if (data?.workspace_id) {
           setRequestStatus(data.status);
           const { data: ws } = await supabase
@@ -56,7 +56,7 @@ export default function PendingApproval() {
         {
           event: "UPDATE",
           schema: "public",
-          table: "workspace_join_requests",
+          table: "workspace_members",
           filter: `user_id=eq.${user.id}`,
         },
         (payload) => {
