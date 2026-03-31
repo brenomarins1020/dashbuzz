@@ -1,36 +1,13 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { useWorkspace } from "@/hooks/useWorkspace";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Link2, Copy } from "lucide-react";
 import { toast } from "sonner";
 
 export function InvitePopover() {
+  const { joinCode } = useWorkspace();
   const [open, setOpen] = useState(false);
-
-  const { data: joinCode } = useQuery({
-    queryKey: ["workspace-join-code"],
-    queryFn: async () => {
-      // Step 1: get workspace_id via memberships view (always works)
-      const { data: m } = await supabase
-        .from("memberships")
-        .select("workspace_id")
-        .limit(1)
-        .single();
-      if (!m?.workspace_id) return null;
-
-      // Step 2: get join_code from workspaces
-      const { data: ws } = await supabase
-        .from("workspaces")
-        .select("join_code")
-        .eq("id", m.workspace_id)
-        .single();
-
-      return (ws as any)?.join_code as string | null;
-    },
-    staleTime: Infinity,
-  });
 
   const handleCopy = () => {
     if (!joinCode) return;
