@@ -81,30 +81,16 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         setUserRole(role);
         setHasPendingRequest(false);
 
-        // Fetch workspace data with select("*") to get ALL columns including join_code
+        // Fetch workspace basic data (name, type, created_at, labels)
         const { data: ws } = await supabase
           .from("workspaces")
           .select("*")
           .eq("id", wsId)
           .single();
 
-        // Try multiple sources for join_code
-        let resolvedCode = (ws as any)?.join_code || null;
-        if (!resolvedCode) {
-          // Fallback: try workspace_codes table
-          const { data: codeRow } = await (supabase as any)
-            .from("workspace_codes")
-            .select("code")
-            .eq("workspace_id", wsId)
-            .single();
-          resolvedCode = (codeRow as any)?.code || null;
-        }
-        if (!resolvedCode) {
-          // Last resort: RPC
-          const { data: rpcCode } = await supabase.rpc("get_my_workspace_join_code" as any);
-          resolvedCode = (rpcCode as string) || null;
-        }
-        setJoinCode(resolvedCode);
+        // Get join code via RPC — bypasses PostgREST schema cache entirely
+        const { data: codeFromRpc } = await supabase.rpc("get_join_code_for_workspace" as any, { ws_id: wsId });
+        setJoinCode(typeof codeFromRpc === "string" ? codeFromRpc : null);
 
         if (ws) {
           setWorkspaceName(ws.name);
