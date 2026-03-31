@@ -81,18 +81,20 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         setUserRole(role);
         setHasPendingRequest(false);
 
-        const [{ data: ws }, { data: joinCodeValue }] = await Promise.all([
+        const [{ data: ws }, { data: codeRow }] = await Promise.all([
           supabase
             .from("workspaces")
-            .select("name, type, created_at, task_cat1_label, task_cat2_label, join_code")
+            .select("name, type, created_at, task_cat1_label, task_cat2_label")
             .eq("id", wsId)
             .single(),
-          supabase.rpc("get_my_workspace_join_code" as any),
+          (supabase as any)
+            .from("workspace_codes")
+            .select("code")
+            .eq("workspace_id", wsId)
+            .single(),
         ]);
 
-        // Use whichever returns a value first
-        const code = (ws as any)?.join_code || (joinCodeValue as string | null) || null;
-        setJoinCode(code);
+        setJoinCode((codeRow as any)?.code || null);
 
         if (ws) {
           setWorkspaceName(ws.name);
