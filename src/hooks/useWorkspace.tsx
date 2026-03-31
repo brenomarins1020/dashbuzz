@@ -88,9 +88,73 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
           .eq("id", wsId)
           .single();
 
-        // Get join code via RPC — bypasses PostgREST schema cache entirely
-        const { data: codeFromRpc } = await supabase.rpc("get_join_code_for_workspace" as any, { ws_id: wsId });
-        setJoinCode(typeof codeFromRpc === "string" ? codeFromRpc : null);
+        // Get join code — try multiple methods with full error logging
+        let finalCode: string | null = null;
+
+        // Method 1: RPC
+        try {
+          const { data: rpcData, error: rpcErr } = await supabase.rpc("get_join_code_for_workspace" as any, { ws_id: wsId });
+          console.log("[JOIN_CODE] RPC:", rpcData, rpcErr);
+          if (!rpcErr && typeof rpcData === "string") finalCode = rpcData;
+        } catch (e) { console.log("[JOIN_CODE] RPC exception:", e); }
+
+        // Method 2: Direct table query
+        if (!finalCode) {
+          try {
+            const { data: tbl, error: tblErr } = await (supabase as any)
+              .from("workspace_codes").select("code").eq("workspace_id", wsId).single();
+            console.log("[JOIN_CODE] Table:", tbl, tblErr);
+            if (!tblErr && tbl?.code) finalCode = tbl.code;
+          } catch (e) { console.log("[JOIN_CODE] Table exception:", e); }
+        }
+
+        // Method 3: Direct fetch to REST API (bypasses JS client entirely)
+        if (!finalCode) {
+          try {
+            const sess = await supabase.auth.getSession();
+            const token = sess.data.session?.access_token;
+            const baseUrl = import.meta.env.VITE_SUPABASE_URL;
+            const apiKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+
+            // Try RPC via raw fetch
+            const rpcResp = await fetch(`${baseUrl}/rest/v1/rpc/get_join_code_for_workspace`, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "apikey": apiKey,
+                "Authorization": `Bearer ${token}`,
+              },
+              body: JSON.stringify({ ws_id: wsId }),
+            });
+            const rpcText = await rpcResp.text();
+            console.log("[JOIN_CODE] Raw RPC fetch:", rpcResp.status, rpcText);
+            if (rpcResp.ok && rpcText && rpcText !== "null") {
+              finalCode = rpcText.replace(/^"|"$/g, "");
+            }
+
+            // Try table via raw fetch
+            if (!finalCode) {
+              const tblResp = await fetch(
+                `${baseUrl}/rest/v1/workspace_codes?workspace_id=eq.${wsId}&select=code`,
+                { headers: { "apikey": apiKey, "Authorization": `Bearer ${token}` } }
+              );
+              const tblJson = await tblResp.json();
+              console.log("[JOIN_CODE] Raw table fetch:", tblResp.status, tblJson);
+              if (Array.isArray(tblJson) && tblJson[0]?.code) {
+                finalCode = tblJson[0].code;
+              }
+            }
+          } catch (e) { console.log("[JOIN_CODE] Raw fetch exception:", e); }
+        }
+
+        // Method 4: join_code column on workspaces (if PostgREST knows about it)
+        if (!finalCode && (ws as any)?.join_code) {
+          finalCode = (ws as any).join_code;
+          console.log("[JOIN_CODE] From column:", finalCode);
+        }
+
+        console.log("[JOIN_CODE] FINAL:", finalCode);
+        setJoinCode(finalCode);
 
         if (ws) {
           setWorkspaceName(ws.name);
