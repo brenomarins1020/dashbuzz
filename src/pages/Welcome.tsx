@@ -161,15 +161,18 @@ export default function Welcome() {
     if (joinCode.length !== 4) return;
     setLoading(true);
     try {
-      const { data } = await supabase.rpc("get_workspace_by_code", { p_code: joinCode });
-      const result = data as any;
-      if (!result || result.error) {
+      const { data, error: rpcErr } = await supabase.rpc("get_workspace_by_code", { p_code: joinCode });
+      if (rpcErr) throw rpcErr;
+      const rows = data as any[];
+      const result = rows?.[0];
+      if (!result) {
         setError("Código inválido. Verifique e tente novamente.");
         return;
       }
-      setJoinWsName(result.workspace_name || "Workspace");
+      const wsName = result.name || "Workspace";
+      setJoinWsName(wsName);
       localStorage.setItem("pendingJoinCode", joinCode);
-      localStorage.setItem("pendingWorkspaceName", result.workspace_name || "Workspace");
+      localStorage.setItem("pendingWorkspaceName", wsName);
       animateTo("join-auth");
     } catch {
       setError("Erro ao verificar o código. Tente novamente.");

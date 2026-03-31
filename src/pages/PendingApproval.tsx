@@ -77,7 +77,7 @@ export default function PendingApproval() {
         {
           event: "INSERT",
           schema: "public",
-          table: "memberships",
+          table: "workspace_members",
           filter: `user_id=eq.${user.id}`,
         },
         () => { goToDashboard(); }
