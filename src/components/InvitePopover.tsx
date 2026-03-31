@@ -1,4 +1,5 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
@@ -7,12 +8,29 @@ import { toast } from "sonner";
 
 export function InvitePopover() {
   const [open, setOpen] = useState(false);
-  const [joinCode, setJoinCode] = useState<string | null>(null);
 
-  useEffect(() => {
-    supabase.rpc("get_my_workspace_join_code" as any)
-      .then(({ data }) => { if (data) setJoinCode(data as string); });
-  }, []);
+  const { data: joinCode } = useQuery({
+    queryKey: ["workspace-join-code"],
+    queryFn: async () => {
+      // Step 1: get workspace_id via memberships view (always works)
+      const { data: m } = await supabase
+        .from("memberships")
+        .select("workspace_id")
+        .limit(1)
+        .single();
+      if (!m?.workspace_id) return null;
+
+      // Step 2: get join_code from workspaces
+      const { data: ws } = await supabase
+        .from("workspaces")
+        .select("join_code")
+        .eq("id", m.workspace_id)
+        .single();
+
+      return (ws as any)?.join_code as string | null;
+    },
+    staleTime: Infinity,
+  });
 
   const handleCopy = () => {
     if (!joinCode) return;
@@ -39,7 +57,7 @@ export function InvitePopover() {
         <div className="text-center py-2 space-y-2">
           <p className="text-xs text-muted-foreground">Código do workspace</p>
           <p className="text-4xl font-mono font-bold tracking-[0.3em] text-accent">
-            {joinCode || "----"}
+            {joinCode ?? "----"}
           </p>
           <p className="text-xs text-muted-foreground leading-relaxed">
             Compartilhe este código com quem você quer convidar.
