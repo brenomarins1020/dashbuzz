@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   Trophy, Briefcase, Globe, ArrowRight, UserPlus, LogIn, Users,
@@ -66,9 +66,10 @@ export default function Welcome() {
   // Shared
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const joiningRef = useRef(false);
 
   useEffect(() => {
-    if (!authLoading && user) {
+    if (!authLoading && user && !joiningRef.current) {
       navigate("/", { replace: true });
     }
   }, [authLoading, user, navigate]);
@@ -198,6 +199,7 @@ export default function Welcome() {
     if (!usernameValid || joinPassword.length < 8) return;
     setError("");
     setLoading(true);
+    joiningRef.current = true;
     try {
       const code = accessCode.trim().toUpperCase();
       const fakeEmail = `${joinUsername}__${code}@member.dashbuzz.app`;
@@ -214,6 +216,7 @@ export default function Welcome() {
           password: joinPassword,
         });
         if (loginErr) {
+          joiningRef.current = false;
           setError("Senha incorreta. Tente novamente.");
           setLoading(false);
           return;
@@ -227,6 +230,7 @@ export default function Welcome() {
         });
         if (signupErr) throw signupErr;
         if (!signupData.session) {
+          joiningRef.current = false;
           setError("Erro ao criar conta. Tente novamente.");
           setLoading(false);
           return;
@@ -250,6 +254,7 @@ export default function Welcome() {
       localStorage.removeItem("pendingAccessCode");
       localStorage.removeItem("pendingWorkspaceName");
     } catch (err: any) {
+      joiningRef.current = false;
       setError(err.message || "Erro ao acessar. Tente novamente.");
     } finally {
       setLoading(false);
