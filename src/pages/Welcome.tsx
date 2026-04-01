@@ -155,32 +155,43 @@ export default function Welcome() {
 
   // ---- JOIN FLOW ----
 
-  // Step 1: Validate access code
+  // Step 1: Validate access code (try invite_token first, then workspace ID)
   const handleAccessCodeContinue = async () => {
     setError("");
     const code = accessCode.trim();
     if (code.length < 4) return;
     setLoading(true);
     try {
-      // Try exact match first, then uppercase version
-      let { data, error: qErr } = await supabase
+      // Try by invite_token
+      let { data } = await supabase
         .from("workspaces")
-        .select("id, name")
+        .select("id, name, invite_token")
         .eq("invite_token", code)
         .single();
-      if (qErr || !data) {
-        ({ data, error: qErr } = await supabase
+      // Try uppercase
+      if (!data) {
+        ({ data } = await supabase
           .from("workspaces")
-          .select("id, name")
+          .select("id, name, invite_token")
           .eq("invite_token", code.toUpperCase())
           .single());
       }
-      if (qErr || !data) {
+      // Try by workspace ID (the admin panel now shows workspace ID as code)
+      if (!data) {
+        ({ data } = await supabase
+          .from("workspaces")
+          .select("id, name, invite_token")
+          .eq("id", code)
+          .single());
+      }
+      if (!data) {
         setError("Código inválido. Verifique e tente novamente.");
         return;
       }
       setJoinWsName(data.name);
-      localStorage.setItem("pendingAccessCode", code);
+      // Store the ACTUAL invite_token from DB for the RPC call
+      const actualToken = data.invite_token || code;
+      localStorage.setItem("pendingAccessCode", actualToken);
       localStorage.setItem("pendingWorkspaceName", data.name);
       localStorage.setItem("targetWorkspaceId", data.id);
       animateTo("join-auth");

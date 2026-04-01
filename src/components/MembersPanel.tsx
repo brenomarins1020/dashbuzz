@@ -20,17 +20,10 @@ export function MembersPanel() {
   const setRoleForReq = (id: string, role: "member" | "admin") =>
     setRoles((prev) => ({ ...prev, [id]: role }));
 
-  // Fetch access code for this workspace
+  // Use workspace ID as access code (guaranteed to work, no PostgREST issues)
   useEffect(() => {
     if (!workspaceId) return;
-    supabase
-      .from("workspaces")
-      .select("invite_token")
-      .eq("id", workspaceId)
-      .single()
-      .then(({ data }) => {
-        if (data?.invite_token) setAccessCode(data.invite_token);
-      });
+    setAccessCode(workspaceId);
   }, [workspaceId]);
 
   const handleCopyCode = () => {
@@ -129,7 +122,7 @@ export function MembersPanel() {
           {accessCode && (
             <div className="text-center py-3 rounded-xl border border-border bg-muted/30">
               <p className="text-xs text-muted-foreground mb-2">Código de acesso do workspace</p>
-              <p className="text-3xl font-mono font-bold tracking-[0.3em] text-accent">
+              <p className="text-sm font-mono font-bold tracking-wide text-accent break-all">
                 {accessCode}
               </p>
               <p className="text-xs text-muted-foreground mt-2 leading-relaxed px-4">

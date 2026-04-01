@@ -65,23 +65,52 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      // Check if user has a pending access request (via RPC, not direct table query)
-      const { data: pendingStatus } = await (supabase as any).rpc("get_my_pending_status");
-      if (pendingStatus && (pendingStatus.status === "pending" || pendingStatus.status === "rejected")) {
-        setWorkspaceId(null);
-        setWorkspaceName(null);
-        setWorkspaceType(null);
-        setWorkspaceCreatedAt(null);
-        setHasPendingRequest(true);
-        setLoading(false);
-        return;
-      }
+      // Check target workspace from join flow
+      const targetWsId = localStorage.getItem("targetWorkspaceId");
 
+      // Get all memberships for this user
       const { data: memberships } = await supabase
         .from("memberships")
         .select("workspace_id, role")
-        .eq("user_id", user.id)
-        .limit(1);
+        .eq("user_id", user.id);
+
+      // If user has a target workspace, check if they're approved there
+      if (targetWsId && memberships) {
+        const targetMembership = memberships.find(m => m.workspace_id === targetWsId);
+        if (targetMembership) {
+          // Approved in target workspace — go there
+          localStorage.removeItem("targetWorkspaceId");
+          localStorage.removeItem("pendingAccessCode");
+          localStorage.removeItem("pendingWorkspaceName");
+          const wsId = targetMembership.workspace_id;
+          const role = (targetMembership as any).role || "member";
+          setWorkspaceId(wsId);
+          setUserRole(role);
+          setHasPendingRequest(false);
+
+          const { data: ws } = await supabase.from("workspaces").select("*").eq("id", wsId).single();
+          if (ws) {
+            setWorkspaceName(ws.name);
+            setWorkspaceType(ws.type);
+            setWorkspaceCreatedAt(ws.created_at);
+            const cat1Raw = (ws as any).task_cat1_label;
+            const cat1 = (!cat1Raw || cat1Raw === "Categoria 1") ? "Área" : cat1Raw;
+            setTaskCat1Label(cat1);
+            setTaskCat2Label((ws as any).task_cat2_label || "Categoria 2");
+          }
+          await migrateLocalStorageToDb(wsId);
+          return;
+        } else {
+          // Not approved in target workspace — must be pending
+          setWorkspaceId(null);
+          setWorkspaceName(null);
+          setWorkspaceType(null);
+          setWorkspaceCreatedAt(null);
+          setHasPendingRequest(true);
+          setLoading(false);
+          return;
+        }
+      }
 
       if (memberships && memberships.length > 0) {
         localStorage.removeItem("targetWorkspaceId");

@@ -101,14 +101,7 @@ function PanelSkeleton() {
 }
 
 const Index = () => {
-  const [view, setView] = useState<View>(() => {
-    try {
-      const saved = localStorage.getItem("dashbuzz_last_view");
-      return VALID_VIEWS.includes(saved as View) ? (saved as View) : "inicio";
-    } catch {
-      return "inicio";
-    }
-  });
+  const [view, setView] = useState<View>("inicio");
   const alreadyShown = hasSplashBeenShown();
   const [splashDone, setSplashDone] = useState(alreadyShown);
   const [appReady, setAppReady] = useState(alreadyShown);
