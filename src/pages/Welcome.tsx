@@ -181,6 +181,7 @@ export default function Welcome() {
       setJoinWsName(data.name);
       localStorage.setItem("pendingAccessCode", code);
       localStorage.setItem("pendingWorkspaceName", data.name);
+      localStorage.setItem("targetWorkspaceId", data.id);
       animateTo("join-auth");
     } catch {
       setError("Erro ao verificar o código. Tente novamente.");

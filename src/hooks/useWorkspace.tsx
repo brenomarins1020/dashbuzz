@@ -65,6 +65,72 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         return;
       }
 
+      // Check if user is trying to join a specific workspace
+      const targetWsId = localStorage.getItem("targetWorkspaceId");
+
+      // If there's a target workspace, check membership there first
+      if (targetWsId) {
+        // Check if user has a pending/rejected request for the target workspace
+        const { data: targetPending } = await (supabase as any)
+          .from("workspace_members")
+          .select("id, status")
+          .eq("user_id", user.id)
+          .eq("workspace_id", targetWsId)
+          .in("status", ["pending", "rejected"])
+          .limit(1);
+
+        if (targetPending && targetPending.length > 0) {
+          setWorkspaceId(null);
+          setWorkspaceName(null);
+          setWorkspaceType(null);
+          setWorkspaceCreatedAt(null);
+          setHasPendingRequest(true);
+          setLoading(false);
+          return;
+        }
+
+        // Check if user is approved in target workspace
+        const { data: targetMembership } = await supabase
+          .from("memberships")
+          .select("workspace_id, role")
+          .eq("user_id", user.id)
+          .eq("workspace_id", targetWsId)
+          .limit(1);
+
+        if (targetMembership && targetMembership.length > 0) {
+          localStorage.removeItem("targetWorkspaceId");
+          const wsId = targetMembership[0].workspace_id;
+          const role = (targetMembership[0] as any).role || "member";
+          setWorkspaceId(wsId);
+          setUserRole(role);
+          setHasPendingRequest(false);
+
+          const { data: ws } = await supabase
+            .from("workspaces")
+            .select("*")
+            .eq("id", wsId)
+            .single();
+
+          if (ws) {
+            setWorkspaceName(ws.name);
+            setWorkspaceType(ws.type);
+            setWorkspaceCreatedAt(ws.created_at);
+            const cat1Raw = (ws as any).task_cat1_label;
+            const cat1 = (!cat1Raw || cat1Raw === "Categoria 1") ? "Área" : cat1Raw;
+            if (!cat1Raw || cat1Raw === "Categoria 1") {
+              supabase.from("workspaces").update({ task_cat1_label: "Área" } as any).eq("id", wsId).then(() => {});
+            }
+            setTaskCat1Label(cat1);
+            setTaskCat2Label((ws as any).task_cat2_label || "Categoria 2");
+            localStorage.setItem("onboardingName", ws.name);
+            localStorage.setItem("onboardingType", ws.type);
+          }
+
+          await migrateLocalStorageToDb(wsId);
+          return;
+        }
+      }
+
       const { data: memberships } = await supabase
         .from("memberships")
         .select("workspace_id, role")
@@ -72,6 +138,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         .limit(1);
 
       if (memberships && memberships.length > 0) {
+        localStorage.removeItem("targetWorkspaceId");
         const wsId = memberships[0].workspace_id;
         const role = (memberships[0] as any).role || "member";
         setWorkspaceId(wsId);

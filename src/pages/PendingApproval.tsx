@@ -42,6 +42,9 @@ export default function PendingApproval() {
   const goToDashboard = () => {
     if (redirected.current) return;
     redirected.current = true;
+    localStorage.removeItem("targetWorkspaceId");
+    localStorage.removeItem("pendingAccessCode");
+    localStorage.removeItem("pendingWorkspaceName");
     window.location.replace("/");
   };
 
