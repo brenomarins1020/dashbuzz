@@ -39,17 +39,14 @@ export function MembersPanel() {
     toast.success("Código copiado!");
   };
 
-  // Fetch pending requests
+  // Fetch pending requests via RPC (workspace_members not exposed via REST)
   const { data: requests = [] } = useQuery({
     queryKey: ["pending-members", workspaceId],
     enabled: !!workspaceId,
     queryFn: async () => {
-      const { data } = await (supabase as any)
-        .from("workspace_members")
-        .select("*")
-        .eq("workspace_id", workspaceId!)
-        .eq("status", "pending")
-        .order("created_at", { ascending: false });
+      const { data } = await (supabase as any).rpc("get_pending_members", {
+        p_workspace_id: workspaceId!,
+      });
       return data || [];
     },
   });

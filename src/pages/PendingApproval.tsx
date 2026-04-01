@@ -13,28 +13,24 @@ export default function PendingApproval() {
   const [workspaceName, setWorkspaceName] = useState<string | null>(null);
   const [requestStatus, setRequestStatus] = useState<string>("pending");
 
-  // Fetch initial workspace name and status
+  // Fetch initial workspace name and status via RPC
   useEffect(() => {
     if (!user) return;
-    (supabase as any)
-      .from("workspace_members")
-      .select("workspace_id, status")
-      .eq("user_id", user.id)
-      .in("status", ["pending", "rejected"])
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .single()
-      .then(async ({ data }: any) => {
-        if (data?.workspace_id) {
-          setRequestStatus(data.status);
-          const { data: ws } = await supabase
-            .from("workspaces")
-            .select("name")
-            .eq("id", data.workspace_id)
-            .single();
-          if (ws) setWorkspaceName(ws.name);
-        }
-      });
+    (supabase as any).rpc("get_my_pending_status").then(async ({ data }: any) => {
+      if (data?.workspace_id) {
+        setRequestStatus(data.status);
+        const { data: ws } = await supabase
+          .from("workspaces")
+          .select("name")
+          .eq("id", data.workspace_id)
+          .single();
+        if (ws) setWorkspaceName(ws.name);
+      } else {
+        // Fallback: use localStorage
+        const storedName = localStorage.getItem("pendingWorkspaceName");
+        if (storedName) setWorkspaceName(storedName);
+      }
+    });
   }, [user]);
 
   // Realtime + polling: listen for approval → auto-redirect
@@ -51,29 +47,7 @@ export default function PendingApproval() {
   useEffect(() => {
     if (!user) return;
 
-    // Realtime: workspace_members status change
-    const channel = supabase
-      .channel(`pending-approval-${user.id}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "UPDATE",
-          schema: "public",
-          table: "workspace_members",
-          filter: `user_id=eq.${user.id}`,
-        },
-        (payload) => {
-          const newStatus = (payload.new as any)?.status;
-          if (newStatus === "approved") {
-            goToDashboard();
-          } else if (newStatus === "rejected") {
-            setRequestStatus("rejected");
-          }
-        }
-      )
-      .subscribe();
-
-    // Polling fallback every 5s
+    // Poll every 3s: check if user got approved (appears in memberships view)
     const poll = setInterval(async () => {
       const { data } = await supabase
         .from("memberships")
@@ -82,10 +56,15 @@ export default function PendingApproval() {
         .limit(1)
         .single();
       if (data) goToDashboard();
-    }, 5000);
+
+      // Also check if rejected via RPC
+      const { data: status } = await (supabase as any).rpc("get_my_pending_status");
+      if (status?.status === "rejected") {
+        setRequestStatus("rejected");
+      }
+    }, 3000);
 
     return () => {
-      supabase.removeChannel(channel);
       clearInterval(poll);
     };
   }, [user]);
