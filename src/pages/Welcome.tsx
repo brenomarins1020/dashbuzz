@@ -157,16 +157,23 @@ export default function Welcome() {
   // Step 1: Validate access code
   const handleAccessCodeContinue = async () => {
     setError("");
-    const code = accessCode.trim().toUpperCase();
+    const code = accessCode.trim();
     if (code.length < 4) return;
     setLoading(true);
     try {
-      // Query workspaces by invite_token (PostgREST knows this column)
-      const { data, error: qErr } = await supabase
+      // Try exact match first, then uppercase version
+      let { data, error: qErr } = await supabase
         .from("workspaces")
         .select("id, name")
         .eq("invite_token", code)
         .single();
+      if (qErr || !data) {
+        ({ data, error: qErr } = await supabase
+          .from("workspaces")
+          .select("id, name")
+          .eq("invite_token", code.toUpperCase())
+          .single());
+      }
       if (qErr || !data) {
         setError("Código inválido. Verifique e tente novamente.");
         return;
@@ -227,8 +234,9 @@ export default function Welcome() {
 
       // Request workspace access
       localStorage.setItem("memberUsername", joinUsername);
+      const storedCode = localStorage.getItem("pendingAccessCode") || code;
       const { data: result } = await supabase.rpc("request_workspace_access", {
-        p_invite_token: code,
+        p_invite_token: storedCode,
         p_requester_name: joinUsername,
       });
       const r = result as any;
@@ -453,12 +461,12 @@ export default function Welcome() {
             </div>
             <input
               type="text"
-              maxLength={6}
-              placeholder="ABC12"
+              maxLength={36}
+              placeholder="Cole o código aqui"
               value={accessCode}
-              onChange={(e) => { setAccessCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 6)); setError(""); }}
+              onChange={(e) => { setAccessCode(e.target.value.replace(/[^a-zA-Z0-9\-]/g, "").slice(0, 36)); setError(""); }}
               autoFocus
-              className="gold-input-focus w-full h-16 rounded-[10px] px-3 text-3xl font-mono tracking-[0.5em] text-center uppercase"
+              className="gold-input-focus w-full h-16 rounded-[10px] px-3 text-lg font-mono tracking-widest text-center uppercase"
               style={dmSans}
               onKeyDown={(e) => e.key === "Enter" && accessCode.length >= 4 && handleAccessCodeContinue()}
             />
