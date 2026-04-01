@@ -44,20 +44,13 @@ export function MembersPanel() {
     },
   });
 
-  // Realtime: auto-refresh when workspace_members changes
+  // Poll for pending requests every 5s (workspace_members not exposed via realtime)
   useEffect(() => {
     if (!workspaceId) return;
-    const channel = supabase
-      .channel("members-realtime")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "workspace_members", filter: `workspace_id=eq.${workspaceId}` },
-        () => {
-          qc.invalidateQueries({ queryKey: ["pending-members", workspaceId] });
-        }
-      )
-      .subscribe();
-    return () => { supabase.removeChannel(channel); };
+    const poll = setInterval(() => {
+      qc.invalidateQueries({ queryKey: ["pending-members", workspaceId] });
+    }, 5000);
+    return () => clearInterval(poll);
   }, [workspaceId, qc]);
 
   const handleApprove = async (req: any) => {

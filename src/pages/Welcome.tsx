@@ -212,8 +212,9 @@ export default function Welcome() {
     setLoading(true);
     joiningRef.current = true;
     try {
-      const code = accessCode.trim().toUpperCase();
-      const fakeEmail = `${joinUsername}__${code}@member.dashbuzz.app`;
+      const targetWsId = localStorage.getItem("targetWorkspaceId") || "";
+      const shortId = targetWsId.split("-")[0] || "ws";
+      const fakeEmail = `${joinUsername}__${shortId}@member.dashbuzz.app`;
 
       // Check if user already exists
       const { data: existingEmail } = await supabase.rpc("get_email_by_username", {
@@ -248,22 +249,22 @@ export default function Welcome() {
         }
       }
 
-      // Request workspace access
+      // Request workspace access — pass workspace ID as token (RPC handles both)
       localStorage.setItem("memberUsername", joinUsername);
-      const storedCode = localStorage.getItem("pendingAccessCode") || code;
+      const wsIdForRpc = localStorage.getItem("targetWorkspaceId") || "";
       const { data: result } = await supabase.rpc("request_workspace_access", {
-        p_invite_token: storedCode,
+        p_invite_token: wsIdForRpc,
         p_requester_name: joinUsername,
       });
       const r = result as any;
       if (r?.error === "already_member") {
+        localStorage.removeItem("pendingAccessCode");
+        localStorage.removeItem("pendingWorkspaceName");
         navigate("/", { replace: true });
       } else {
+        // Keep targetWorkspaceId for pending flow
         navigate("/pending-approval", { replace: true });
       }
-
-      localStorage.removeItem("pendingAccessCode");
-      localStorage.removeItem("pendingWorkspaceName");
     } catch (err: any) {
       joiningRef.current = false;
       setError(err.message || "Erro ao acessar. Tente novamente.");
