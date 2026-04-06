@@ -44,15 +44,15 @@ export function MembersPanel() {
     },
   });
 
-  // Fetch approved members via memberships view
+  // Fetch approved members via RPC (includes display_name)
   const { data: approvedMembers = [] } = useQuery({
     queryKey: ["approved-members", workspaceId],
     enabled: !!workspaceId,
+    refetchInterval: 5000,
     queryFn: async () => {
-      const { data } = await supabase
-        .from("memberships")
-        .select("*")
-        .eq("workspace_id", workspaceId!);
+      const { data } = await (supabase as any).rpc("get_approved_members", {
+        p_workspace_id: workspaceId!,
+      });
       return data || [];
     },
   });
@@ -223,8 +223,8 @@ export function MembersPanel() {
               </p>
               <div className="space-y-1.5">
                 {approvedMembers.map((m: any) => (
-                  <div key={m.id} className="flex items-center justify-between rounded-lg border border-border/50 px-3 py-2">
-                    <p className="text-sm truncate">{m.user_id?.slice(0, 8)}...</p>
+                  <div key={m.id || m.user_id} className="flex items-center justify-between rounded-lg border border-border/50 px-3 py-2">
+                    <p className="text-sm truncate">@{m.display_name || "usuário"}</p>
                     <span className={cn(
                       "text-xs font-medium rounded-full px-2 py-0.5",
                       m.role === "admin" ? "bg-accent/20 text-accent" : "bg-secondary text-muted-foreground"

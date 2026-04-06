@@ -112,5 +112,34 @@ END;
 $$;
 GRANT EXECUTE ON FUNCTION public.get_my_pending_status() TO authenticated;
 
--- 4. Reload schema cache
+-- 4. Cria get_approved_members (usado pelo MembersPanel para listar membros com display_name)
+CREATE OR REPLACE FUNCTION public.get_approved_members(p_workspace_id UUID)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+  RETURN COALESCE(
+    (
+      SELECT jsonb_agg(
+        jsonb_build_object(
+          'id', wm.id,
+          'user_id', wm.user_id,
+          'display_name', wm.display_name,
+          'role', wm.role,
+          'created_at', wm.created_at
+        )
+        ORDER BY wm.created_at ASC
+      )
+      FROM public.workspace_members wm
+      WHERE wm.workspace_id = p_workspace_id
+        AND wm.status = 'approved'
+    ),
+    '[]'::jsonb
+  );
+END;
+$$;
+GRANT EXECUTE ON FUNCTION public.get_approved_members(UUID) TO authenticated;
+
+-- 5. Reload schema cache
 NOTIFY pgrst, 'reload schema';
