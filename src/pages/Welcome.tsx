@@ -249,9 +249,9 @@ export default function Welcome() {
         }
       }
 
-      // Request workspace access — pass workspace ID as token (RPC handles both)
+      // Request workspace access — pass invite_token or workspace ID (RPC handles both)
       localStorage.setItem("memberUsername", joinUsername);
-      const wsIdForRpc = localStorage.getItem("targetWorkspaceId") || "";
+      const wsIdForRpc = localStorage.getItem("pendingAccessCode") || localStorage.getItem("targetWorkspaceId") || "";
       const { data: result } = await supabase.rpc("request_workspace_access", {
         p_invite_token: wsIdForRpc,
         p_requester_name: joinUsername,

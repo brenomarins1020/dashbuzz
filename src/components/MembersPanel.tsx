@@ -35,7 +35,7 @@ export function MembersPanel() {
   const { data: requests = [] } = useQuery({
     queryKey: ["pending-members", workspaceId],
     enabled: !!workspaceId,
-    refetchInterval: 5000,
+    refetchInterval: 3000,
     queryFn: async () => {
       const { data } = await (supabase as any).rpc("get_pending_members", {
         p_workspace_id: workspaceId!,
