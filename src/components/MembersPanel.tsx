@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useWorkspace } from "@/hooks/useWorkspace";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { Users, ChevronDown, Check, X, Shield, Loader2, Copy } from "lucide-react";
+import { Users, ChevronDown, Check, X, Shield, Loader2, Copy, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -14,28 +14,28 @@ export function MembersPanel() {
   const qc = useQueryClient();
   const [roles, setRoles] = useState<Record<string, "member" | "admin">>({});
   const [loadingId, setLoadingId] = useState<string | null>(null);
-  const [accessCode, setAccessCode] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
 
   const getRoleForReq = (id: string) => roles[id] ?? "member";
   const setRoleForReq = (id: string, role: "member" | "admin") =>
     setRoles((prev) => ({ ...prev, [id]: role }));
 
-  // Use workspace ID as access code (guaranteed to work, no PostgREST issues)
-  useEffect(() => {
-    if (!workspaceId) return;
-    setAccessCode(workspaceId);
-  }, [workspaceId]);
+  // Access code = workspace ID (guaranteed to work)
+  const accessCode = workspaceId || "";
 
   const handleCopyCode = () => {
     if (!accessCode) return;
     navigator.clipboard.writeText(accessCode);
+    setCopied(true);
     toast.success("Código copiado!");
+    setTimeout(() => setCopied(false), 2000);
   };
 
-  // Fetch pending requests via RPC (workspace_members not exposed via REST)
+  // Fetch pending requests via RPC
   const { data: requests = [] } = useQuery({
     queryKey: ["pending-members", workspaceId],
     enabled: !!workspaceId,
+    refetchInterval: 5000,
     queryFn: async () => {
       const { data } = await (supabase as any).rpc("get_pending_members", {
         p_workspace_id: workspaceId!,
@@ -44,14 +44,18 @@ export function MembersPanel() {
     },
   });
 
-  // Poll for pending requests every 5s (workspace_members not exposed via realtime)
-  useEffect(() => {
-    if (!workspaceId) return;
-    const poll = setInterval(() => {
-      qc.invalidateQueries({ queryKey: ["pending-members", workspaceId] });
-    }, 5000);
-    return () => clearInterval(poll);
-  }, [workspaceId, qc]);
+  // Fetch approved members via memberships view
+  const { data: approvedMembers = [] } = useQuery({
+    queryKey: ["approved-members", workspaceId],
+    enabled: !!workspaceId,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("memberships")
+        .select("*")
+        .eq("workspace_id", workspaceId!);
+      return data || [];
+    },
+  });
 
   const handleApprove = async (req: any) => {
     if (loadingId) return;
@@ -64,6 +68,7 @@ export function MembersPanel() {
       });
       if (error) throw error;
       qc.invalidateQueries({ queryKey: ["pending-members", workspaceId] });
+      qc.invalidateQueries({ queryKey: ["approved-members", workspaceId] });
       qc.invalidateQueries({ queryKey: ["team-members"] });
       toast.success(`${req.display_name} aprovado como ${role === "admin" ? "Admin" : "Membro"}`);
     } catch (err: any) {
@@ -104,7 +109,7 @@ export function MembersPanel() {
                 </span>
               )}
             </p>
-            <p className="text-xs text-muted-foreground">Código de acesso e solicitações pendentes</p>
+            <p className="text-xs text-muted-foreground">Código de acesso e gestão de membros</p>
           </div>
         </div>
         <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform data-[state=open]:rotate-180" />
@@ -115,7 +120,7 @@ export function MembersPanel() {
           {accessCode && (
             <div className="text-center py-3 rounded-xl border border-border bg-muted/30">
               <p className="text-xs text-muted-foreground mb-2">Código de acesso do workspace</p>
-              <p className="text-sm font-mono font-bold tracking-wide text-accent break-all">
+              <p className="text-xs font-mono font-bold tracking-wide text-accent break-all px-4 select-all">
                 {accessCode}
               </p>
               <p className="text-xs text-muted-foreground mt-2 leading-relaxed px-4">
@@ -125,8 +130,8 @@ export function MembersPanel() {
                 onClick={handleCopyCode}
                 className="mt-2 h-8 px-4 rounded-full border border-border text-xs hover:bg-muted transition-colors inline-flex items-center gap-1.5"
               >
-                <Copy className="h-3 w-3" />
-                Copiar código
+                {copied ? <CheckCircle2 className="h-3 w-3 text-emerald-400" /> : <Copy className="h-3 w-3" />}
+                {copied ? "Copiado!" : "Copiar código"}
               </button>
             </div>
           )}
@@ -150,7 +155,7 @@ export function MembersPanel() {
                         <div className="min-w-0 flex-1">
                           <p className="text-sm font-medium truncate">@{req.display_name}</p>
                           <p className="text-xs text-muted-foreground/60">
-                            {format(new Date(req.created_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+                            {req.created_at && format(new Date(req.created_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
                           </p>
                         </div>
                         <div className="flex items-center gap-1.5 ml-3 shrink-0">
@@ -209,6 +214,28 @@ export function MembersPanel() {
               </div>
             )}
           </div>
+
+          {/* Approved members */}
+          {approvedMembers.length > 0 && (
+            <div>
+              <p className="text-xs font-medium text-muted-foreground mb-2">
+                Membros aprovados ({approvedMembers.length})
+              </p>
+              <div className="space-y-1.5">
+                {approvedMembers.map((m: any) => (
+                  <div key={m.id} className="flex items-center justify-between rounded-lg border border-border/50 px-3 py-2">
+                    <p className="text-sm truncate">{m.user_id?.slice(0, 8)}...</p>
+                    <span className={cn(
+                      "text-xs font-medium rounded-full px-2 py-0.5",
+                      m.role === "admin" ? "bg-accent/20 text-accent" : "bg-secondary text-muted-foreground"
+                    )}>
+                      {m.role === "admin" ? "Admin" : "Membro"}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </CollapsibleContent>
     </Collapsible>

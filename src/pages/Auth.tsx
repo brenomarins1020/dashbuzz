@@ -1,142 +1,61 @@
 import { useState, useEffect, useRef } from "react";
 import { useNavigate, useSearchParams, Link } from "react-router-dom";
-import { Loader2, AlertCircle, CheckCircle2, XCircle, Info, Eye, EyeOff } from "lucide-react";
-import { toast } from "sonner";
+import { Loader2, AlertCircle, Eye, EyeOff } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { lovable } from "@/integrations/lovable/index";
 import { useAuth } from "@/hooks/useAuth";
-import { useWorkspace } from "@/hooks/useWorkspace";
 import { AuthLayout } from "@/components/AuthLayout";
-
-const typeLabels: Record<string, string> = {
-  atletica: "Atlética",
-  ej: "Empresa Júnior",
-  outros: "",
-};
-
-const rules = [
-  { label: "Mínimo 10 caracteres", test: (p: string) => p.length >= 10 },
-  { label: "Pelo menos 1 letra maiúscula", test: (p: string) => /[A-Z]/.test(p) },
-  { label: "Pelo menos 1 número", test: (p: string) => /\d/.test(p) },
-];
+import { generateMemberEmail, mapSupabaseError } from "@/lib/authHelpers";
 
 const dmSans = { fontFamily: "'DM Sans', sans-serif" };
 
 export default function Auth() {
   const navigate = useNavigate();
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams] = useSearchParams();
   const { user, loading: authLoading } = useAuth();
-  const { createWorkspace } = useWorkspace();
-  const obType = localStorage.getItem("onboardingType");
-  const obName = localStorage.getItem("onboardingName");
 
   const mode = searchParams.get("mode") === "signup" ? "signup" : "login";
-  // removed loginMode toggle
 
-  const [displayName, setDisplayName] = useState(obName || "");
-  const [email, setEmail] = useState("");
-  // removed username state
+  // Login type: "admin" (email) or "member" (username)
+  const [loginType, setLoginType] = useState<"admin" | "member">("member");
+  const [identifier, setIdentifier] = useState(""); // email or username
   const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const [signupSuccess, setSignupSuccess] = useState(false);
-
-  useEffect(() => {
-    if (mode === "signup" && (!obType || !obName)) {
-      navigate("/welcome?step=onboarding", { replace: true });
-    }
-  }, [mode, obType, obName, navigate]);
-
-  // Only redirect if user was ALREADY logged in when arriving at /auth
-  // (e.g. pressing browser back button). Do NOT fire after a fresh login
-  // because handleLogin/handleSignup already call navigate().
   const didLoginRef = useRef(false);
+
+  // Redirect if already logged in
   useEffect(() => {
     if (!authLoading && user && !didLoginRef.current) {
       navigate("/", { replace: true });
     }
   }, [authLoading, user]);
 
-  const setMode = (m: "login" | "signup") => {
-    setError("");
-    setSignupSuccess(false);
-    if (m === "signup" && (!obType || !obName)) {
-      navigate("/welcome?step=onboarding", { replace: true });
-      return;
-    }
-    setSearchParams({ mode: m });
-  };
-
-  const allRulesPass = rules.every((r) => r.test(password));
-  const passwordsMatch = password === confirmPassword;
-
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!identifier.trim() || !password) return;
     setError("");
     setLoading(true);
     didLoginRef.current = true;
-    try {
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) throw error;
-      navigate("/", { replace: true });
-    } catch (err: any) {
-      setError(
-        err.message === "Invalid login credentials"
-          ? "Email ou senha incorretos."
-          : err.message || "Erro ao fazer login."
-      );
-    } finally {
-      setLoading(false);
-    }
-  };
 
-  const handleSignup = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!allRulesPass || !passwordsMatch) return;
-    setError("");
-    setLoading(true);
-    didLoginRef.current = true;
     try {
-      const { data, error } = await supabase.auth.signUp({
+      const email = loginType === "member"
+        ? generateMemberEmail(identifier.trim().toLowerCase())
+        : identifier.trim();
+
+      const { error: loginErr } = await supabase.auth.signInWithPassword({
         email,
         password,
-        options: {
-          data: {
-            org_type: obType,
-            org_name: displayName.trim() || obName,
-            display_name: displayName.trim() || obName,
-          },
-        },
       });
-      if (error) throw error;
-
-      if (data.session) {
-        try {
-          await createWorkspace(obType || "ej", displayName.trim() || obName || "Workspace");
-        } catch (wsErr) {
-          console.error("Workspace creation error:", wsErr);
-        }
-        navigate("/", { replace: true });
-      } else {
-        setSignupSuccess(true);
-      }
+      if (loginErr) throw loginErr;
+      navigate("/", { replace: true });
     } catch (err: any) {
-      const msg = err.message === "User already registered"
-        ? "Email já registrado."
-        : err.message || "Erro ao criar conta.";
-      setError(msg);
+      didLoginRef.current = false;
+      setError(mapSupabaseError(err.message || ""));
     } finally {
       setLoading(false);
     }
   };
-
-  const currentName = displayName.trim() || obName;
-  const workspaceLabel = mode === "signup" && obType && currentName
-    ? `${typeLabels[obType] || obType} — ${currentName}`
-    : null;
 
   if (authLoading) {
     return (
@@ -147,300 +66,133 @@ export default function Auth() {
   }
 
   return (
-    <AuthLayout
-      title={currentName || "DASHBUZZ"}
-      subtitle="Marketing Dashboard"
-    >
-      {/* Workspace badge (signup without invite only) */}
-      {workspaceLabel && (
-        <div className="flex items-center justify-center gap-2 mb-4">
-          <span
-            className="text-xs font-medium rounded-full px-3 py-1"
+    <AuthLayout title="DASHBUZZ" subtitle="Marketing Dashboard">
+      <form onSubmit={handleLogin} className="glass-card-auth p-6 space-y-4">
+        <p className="text-center text-sm font-semibold text-white mb-1" style={dmSans}>
+          Entrar na sua conta
+        </p>
+
+        {/* Toggle Admin / Membro */}
+        <div className="flex rounded-lg overflow-hidden border border-white/10">
+          <button
+            type="button"
+            onClick={() => { setLoginType("member"); setIdentifier(""); setError(""); }}
+            className="flex-1 py-2 text-xs font-medium transition-all"
             style={{
-              background: "rgba(245,166,35,0.15)",
-              border: "1px solid rgba(245,166,35,0.3)",
-              color: "#F5A623",
+              background: loginType === "member" ? "rgba(245,166,35,0.2)" : "transparent",
+              color: loginType === "member" ? "#F5A623" : "rgba(255,255,255,0.4)",
+              borderRight: "1px solid rgba(255,255,255,0.1)",
               ...dmSans,
             }}
           >
-            {workspaceLabel}
-          </span>
+            Membro
+          </button>
           <button
-            onClick={() => {
-              localStorage.removeItem("onboardingType");
-              localStorage.removeItem("onboardingName");
-              navigate("/welcome?step=onboarding", { replace: true });
+            type="button"
+            onClick={() => { setLoginType("admin"); setIdentifier(""); setError(""); }}
+            className="flex-1 py-2 text-xs font-medium transition-all"
+            style={{
+              background: loginType === "admin" ? "rgba(245,166,35,0.2)" : "transparent",
+              color: loginType === "admin" ? "#F5A623" : "rgba(255,255,255,0.4)",
+              ...dmSans,
             }}
-            className="text-[10px] text-white/30 hover:text-white/60 hover:underline transition-all"
-            style={dmSans}
           >
-            Trocar
+            Admin
           </button>
         </div>
-      )}
 
-      {/* Context banner */}
-      {mode === "signup" && obName && (
-        <div
-          className="flex items-center gap-2 text-xs rounded-lg px-3 py-2 mb-4"
-          style={{
-            background: "rgba(245,166,35,0.1)",
-            border: "1px solid rgba(245,166,35,0.2)",
-            color: "rgba(245,166,35,0.9)",
-            ...dmSans,
-          }}
-        >
-          <Info className="h-3.5 w-3.5 shrink-0" />
-          Você está criando um novo workspace para {obName}
-        </div>
-      )}
-
-      {/* Signup success message */}
-      {signupSuccess ? (
-        <div className="glass-card-auth p-6 space-y-4 text-center">
-          <CheckCircle2 className="h-10 w-10 mx-auto" style={{ color: "#F5A623" }} />
-          <p className="text-sm font-medium text-white" style={dmSans}>
-            Conta criada! Verifique seu email para confirmar.
-          </p>
-          <p className="text-xs text-white/40" style={dmSans}>
-            Após confirmar, volte aqui e faça login.
-          </p>
-          <button
-            onClick={() => setMode("login")}
-            className="btn-gold-shimmer w-full h-10 text-sm"
-            style={dmSans}
-          >
-            Ir para login
-          </button>
-        </div>
-      ) : mode === "login" ? (
-        /* LOGIN */
-        <form onSubmit={handleLogin} className="glass-card-auth p-6 space-y-4">
-          <div className="space-y-2">
-            <label htmlFor="email" className="text-sm font-medium text-white/70" style={dmSans}>Email</label>
+        {/* Identifier field */}
+        <div className="space-y-2">
+          <label className="text-sm font-medium text-white/70" style={dmSans}>
+            {loginType === "admin" ? "Email" : "Nome de usuário"}
+          </label>
+          {loginType === "member" ? (
+            <div className="relative">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40 text-sm" style={dmSans}>@</span>
+              <input
+                type="text"
+                placeholder="seunome"
+                value={identifier}
+                onChange={(e) => setIdentifier(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ""))}
+                autoFocus
+                required
+                className="gold-input-focus w-full h-10 rounded-[10px] pl-7 pr-3 text-sm"
+                style={dmSans}
+              />
+            </div>
+          ) : (
             <input
-              id="email"
               type="email"
-              autoComplete="email"
               placeholder="email@empresa.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
+              value={identifier}
+              onChange={(e) => setIdentifier(e.target.value)}
               autoFocus
+              required
               className="gold-input-focus w-full h-10 rounded-[10px] px-3 text-sm"
               style={dmSans}
             />
-          </div>
-          <div className="space-y-2">
-            <label htmlFor="password" className="text-sm font-medium text-white/70" style={dmSans}>Senha</label>
-            <div className="relative">
-              <input
-                id="password"
-                type={showPassword ? "text" : "password"}
-                autoComplete="current-password"
-                placeholder="••••••••••"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                className="gold-input-focus w-full h-10 rounded-[10px] px-3 pr-10 text-sm"
-                style={dmSans}
-              />
-              <button
-                type="button"
-                onClick={() => setShowPassword(v => !v)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-white/40 hover:text-white/70 transition-colors"
-                aria-label={showPassword ? "Ocultar senha" : "Mostrar senha"}
-                tabIndex={-1}
-              >
-                {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-              </button>
-            </div>
-          </div>
-
-          {error && (
-            <div
-              className="flex items-center gap-2 text-sm rounded-lg px-3 py-2"
-              style={{ background: "rgba(239,68,68,0.15)", border: "1px solid rgba(239,68,68,0.3)", color: "#f87171", ...dmSans }}
-            >
-              <AlertCircle className="h-4 w-4 shrink-0" />
-              {error}
-            </div>
           )}
+        </div>
 
-          <button type="submit" disabled={loading} className="btn-gold-shimmer w-full h-10 flex items-center justify-center gap-2 text-sm" style={dmSans}>
-            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-            Entrar
-          </button>
-
-          <div className="text-center space-y-2 pt-1" style={dmSans}>
-            <Link
-              to="/reset-password"
-              className="text-xs hover:underline transition-all"
-              style={{ color: "#F5A623" }}
+        {/* Password */}
+        <div className="space-y-2">
+          <label className="text-sm font-medium text-white/70" style={dmSans}>Senha</label>
+          <div className="relative">
+            <input
+              type={showPassword ? "text" : "password"}
+              placeholder="••••••••"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              className="gold-input-focus w-full h-10 rounded-[10px] px-3 pr-10 text-sm"
+              style={dmSans}
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword(!showPassword)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-white/40 hover:text-white/70"
+              tabIndex={-1}
             >
+              {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            </button>
+          </div>
+        </div>
+
+        {/* Error */}
+        {error && (
+          <div
+            className="flex items-center gap-2 text-sm rounded-lg px-3 py-2"
+            style={{ background: "rgba(239,68,68,0.15)", border: "1px solid rgba(239,68,68,0.3)", color: "#f87171", ...dmSans }}
+          >
+            <AlertCircle className="h-4 w-4 shrink-0" />
+            {error}
+          </div>
+        )}
+
+        <button
+          type="submit"
+          disabled={loading || !identifier.trim() || !password}
+          className="btn-gold-shimmer w-full h-10 flex items-center justify-center gap-2 text-sm font-semibold"
+          style={dmSans}
+        >
+          {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+          Entrar
+        </button>
+
+        <div className="text-center space-y-2 pt-1" style={dmSans}>
+          {loginType === "admin" && (
+            <Link to="/reset-password" className="text-xs hover:underline" style={{ color: "#F5A623" }}>
               Esqueci minha senha
             </Link>
-            <p className="text-xs text-white/40">
-              Não tem conta?{" "}
-              <button
-                type="button"
-                onClick={() => setMode("signup")}
-                className="hover:underline"
-                style={{ color: "#F5A623" }}
-              >
-                Criar conta
-              </button>
-            </p>
-            <button
-              type="button"
-              onClick={() => navigate("/welcome")}
-              className="text-xs hover:underline transition-all"
-              style={{ color: "#F5A623" }}
-            >
-              ← Voltar
-            </button>
-          </div>
-        </form>
-      ) : (
-        /* SIGNUP */
-        <form onSubmit={handleSignup} className="glass-card-auth p-6 space-y-4">
-          <div className="space-y-2">
-            <label htmlFor="name" className="text-sm font-medium text-white/70" style={dmSans}>Nome da instituição</label>
-            <input
-              id="name"
-              type="text"
-              placeholder="Nome da organização"
-              value={displayName}
-              onChange={(e) => {
-                setDisplayName(e.target.value);
-                localStorage.setItem("onboardingName", e.target.value.trim() || obName || "");
-              }}
-              required
-              autoFocus
-              className="gold-input-focus w-full h-10 rounded-[10px] px-3 text-sm"
-              style={dmSans}
-            />
-          </div>
-          <div className="space-y-2">
-            <label htmlFor="signup-email" className="text-sm font-medium text-white/70" style={dmSans}>Email</label>
-            <input
-              id="signup-email"
-              type="email"
-              autoComplete="email"
-              placeholder="email@empresa.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              className="gold-input-focus w-full h-10 rounded-[10px] px-3 text-sm"
-              style={dmSans}
-            />
-          </div>
-          <div className="space-y-2">
-            <label htmlFor="signup-password" className="text-sm font-medium text-white/70" style={dmSans}>Senha</label>
-            <div className="relative">
-              <input
-                id="signup-password"
-                type={showPassword ? "text" : "password"}
-                autoComplete="new-password"
-                placeholder="••••••••••"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                className="gold-input-focus w-full h-10 rounded-[10px] px-3 pr-10 text-sm"
-                style={dmSans}
-              />
-              <button
-                type="button"
-                onClick={() => setShowPassword(v => !v)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-white/40 hover:text-white/70 transition-colors"
-                aria-label={showPassword ? "Ocultar senha" : "Mostrar senha"}
-                tabIndex={-1}
-              >
-                {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-              </button>
-            </div>
-            {password.length > 0 && (
-              <div className="space-y-1 pt-1">
-                {rules.map((r) => {
-                  const ok = r.test(password);
-                  return (
-                    <div key={r.label} className="flex items-center gap-1.5 text-xs" style={dmSans}>
-                      {ok ? (
-                        <CheckCircle2 className="h-3.5 w-3.5" style={{ color: "#F5A623" }} />
-                      ) : (
-                        <XCircle className="h-3.5 w-3.5" style={{ color: "#f87171" }} />
-                      )}
-                      <span style={{ color: ok ? "#F5A623" : "#f87171" }}>
-                        {r.label}
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-          <div className="space-y-2">
-            <label htmlFor="confirm-password" className="text-sm font-medium text-white/70" style={dmSans}>Confirmar senha</label>
-            <div className="relative">
-              <input
-                id="confirm-password"
-                type={showConfirmPassword ? "text" : "password"}
-                autoComplete="new-password"
-                placeholder="••••••••••"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                required
-                className="gold-input-focus w-full h-10 rounded-[10px] px-3 pr-10 text-sm"
-                style={dmSans}
-              />
-              <button
-                type="button"
-                onClick={() => setShowConfirmPassword(v => !v)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-white/40 hover:text-white/70 transition-colors"
-                aria-label={showConfirmPassword ? "Ocultar senha" : "Mostrar senha"}
-                tabIndex={-1}
-              >
-                {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-              </button>
-            </div>
-            {confirmPassword.length > 0 && !passwordsMatch && (
-              <p className="text-xs" style={{ color: "#f87171", ...dmSans }}>As senhas não coincidem.</p>
-            )}
-          </div>
-
-          {error && (
-            <div
-              className="flex items-center gap-2 text-sm rounded-lg px-3 py-2"
-              style={{ background: "rgba(239,68,68,0.15)", border: "1px solid rgba(239,68,68,0.3)", color: "#f87171", ...dmSans }}
-            >
-              <AlertCircle className="h-4 w-4 shrink-0" />
-              {error}
-            </div>
           )}
-
-          <button
-            type="submit"
-            disabled={loading || !allRulesPass || !passwordsMatch || !displayName.trim()}
-            className="btn-gold-shimmer w-full h-10 flex items-center justify-center gap-2 text-sm"
-            style={dmSans}
-          >
-            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-            Criar conta
-          </button>
-
-          <p className="text-center text-xs text-white/40 pt-1" style={dmSans}>
-            Já tem conta?{" "}
-            <button
-              type="button"
-              onClick={() => setMode("login")}
-              className="hover:underline"
-              style={{ color: "#F5A623" }}
-            >
-              Entrar
+          <p className="text-xs text-white/40">
+            Não tem conta?{" "}
+            <button type="button" onClick={() => navigate("/welcome")} className="hover:underline" style={{ color: "#F5A623" }}>
+              Criar conta ou entrar com código
             </button>
           </p>
-        </form>
-      )}
+        </div>
+      </form>
     </AuthLayout>
   );
 }
