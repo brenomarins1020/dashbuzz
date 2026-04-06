@@ -487,7 +487,7 @@ export function TasksPanelNew() {
   const { tasks, loading, addTask, updateTask, deleteTask } = useTasks();
   const config = useWorkspaceConfig();
   const taskCats = useTaskCategories();
-  const { taskCat1Label, taskCat2Label, isAdmin } = useWorkspace();
+  const { taskCat1Label, taskCat2Label } = useWorkspace();
 
   const [search, setSearch] = useState("");
   const [selectedCat1, setSelectedCat1] = useState<Set<string>>(new Set());
@@ -634,16 +634,14 @@ export function TasksPanelNew() {
           </span>
         )}
         <StatusBadgeFilled status={task.status} color={STATUS_COLORS[task.status]} />
-        {isAdmin && (
-          <div className="flex gap-0.5 shrink-0">
-            <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground" onClick={() => setEditingId(task.id)}>
-              <Pencil className="h-3.5 w-3.5" />
-            </Button>
-            <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive" onClick={() => setDeleteId(task.id)} title="Mover para lixeira">
-              <Trash2 className="h-3.5 w-3.5" />
-            </Button>
-          </div>
-        )}
+        <div className="flex gap-0.5 shrink-0">
+          <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground" onClick={() => setEditingId(task.id)}>
+            <Pencil className="h-3.5 w-3.5" />
+          </Button>
+          <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive" onClick={() => setDeleteId(task.id)} title="Mover para lixeira">
+            <Trash2 className="h-3.5 w-3.5" />
+          </Button>
+        </div>
       </div>
     );
   };

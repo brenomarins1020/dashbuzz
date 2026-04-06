@@ -29,7 +29,7 @@ interface Props {
 export function AttendancePeople({ attendance, members }: Props) {
   const { participants, occurrences, attendance: records, meetings, updateParticipants } = attendance;
   const { addMember, removeMember, updateMember } = useTeam();
-  const { workspaceId, isAdmin } = useWorkspace();
+  const { workspaceId } = useWorkspace();
   const { activeGroup1: areaOptions } = useTaskCategories();
   const { toast } = useToast();
   const qc = useQueryClient();
@@ -229,7 +229,7 @@ export function AttendancePeople({ attendance, members }: Props) {
                     <div className="flex items-center gap-2">
                       <p className="text-sm font-semibold truncate">{m.name}</p>
                       {memberRole && (
-                        isAdmin && m.teamMember.user_id ? (
+                        m.teamMember.user_id ? (
                           <Popover>
                             <PopoverTrigger asChild>
                               <button

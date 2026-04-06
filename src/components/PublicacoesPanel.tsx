@@ -11,7 +11,6 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { usePosts, type Post } from "@/hooks/usePosts";
 import { useWorkspaceConfig } from "@/hooks/useWorkspaceConfig";
 import { useTeam } from "@/hooks/useTeam";
-import { useWorkspace } from "@/hooks/useWorkspace";
 import { StatusBadgeFilled } from "@/components/StatusBadgeFilled";
 import { QuickEditModal, type QuickEditItem } from "@/components/QuickEditModal";
 import { ChipSelect, type ChipOption } from "@/components/ChipSelect";
@@ -175,7 +174,6 @@ function MobileMediaCreation({ newConteudo, setNewConteudo, newLocal, setNewLoca
 export function PublicacoesPanel() {
   const { posts, addPost: onAdd, updatePost: onUpdate, deletePost: onDelete } = usePosts();
   const config = useWorkspaceConfig();
-  const { isAdmin } = useWorkspace();
   const { members } = useTeam();
   const { activeProfiles, activeCategories, activeStatuses, profiles, categories, statuses, roles } = config;
 
@@ -389,16 +387,12 @@ export function PublicacoesPanel() {
           <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground" onClick={() => setViewPost(post)}>
             <Eye className="h-3.5 w-3.5" />
           </Button>
-          {isAdmin && (
-            <>
-              <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground" onClick={() => setEditingId(post.id)}>
-                <Pencil className="h-3.5 w-3.5" />
-              </Button>
-              <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive" onClick={() => setDeleteId(post.id)} title="Mover para lixeira">
-                <Trash2 className="h-3.5 w-3.5" />
-              </Button>
-            </>
-          )}
+          <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground" onClick={() => setEditingId(post.id)}>
+            <Pencil className="h-3.5 w-3.5" />
+          </Button>
+          <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive" onClick={() => setDeleteId(post.id)} title="Mover para lixeira">
+            <Trash2 className="h-3.5 w-3.5" />
+          </Button>
         </div>
       </div>
     );

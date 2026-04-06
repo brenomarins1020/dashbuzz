@@ -10,7 +10,7 @@ interface MobileHeaderProps {
 
 export function MobileHeader({ viewTitle }: MobileHeaderProps) {
   const { user, signOut } = useAuth();
-  const { workspaceName, isAdmin } = useWorkspace();
+  const { workspaceName } = useWorkspace();
 
   const dn = user?.user_metadata?.display_name;
   const isMember = user?.email?.includes("@member.dashbuzz.app");
@@ -25,7 +25,6 @@ export function MobileHeader({ viewTitle }: MobileHeaderProps) {
         borderBottom: "1px solid rgba(255,255,255,0.08)",
       }}
     >
-      {/* Left: Logo + workspace name + current view */}
       <div className="flex items-center gap-2.5 min-w-0">
         <div className="h-8 w-8 rounded-md border-2 border-amber-500/70 flex items-center justify-center shrink-0">
           <LayoutDashboard className="h-4 w-4 text-amber-400" />
@@ -40,18 +39,12 @@ export function MobileHeader({ viewTitle }: MobileHeaderProps) {
         </div>
       </div>
 
-      {/* Right: User name + badge */}
       <Popover>
         <PopoverTrigger asChild>
           <button className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg -mr-1" style={{ WebkitTapHighlightColor: "transparent" }}>
             <span className="text-[11px] font-medium text-white/70 truncate max-w-[80px]">
               {displayName}
             </span>
-            {isAdmin && (
-              <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400">
-                admin
-              </span>
-            )}
           </button>
         </PopoverTrigger>
         <PopoverContent align="end" className="w-44 p-2" sideOffset={8}>

@@ -1,9 +1,9 @@
 import { useState, useEffect, useRef } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import {
   Trophy, Briefcase, Globe, ArrowRight, UserPlus, LogIn, Users,
   ChevronRight, AlertCircle, CheckCircle2, XCircle, Loader2,
-  Eye, EyeOff,
+  Eye, EyeOff, Lock,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { AuthLayout } from "@/components/AuthLayout";
@@ -15,9 +15,9 @@ type Step =
   | "choose"
   | "type"
   | "name"
+  | "ws-password"
   | "admin-auth"
-  | "access-code"
-  | "join-auth";
+  | "join-form";
 
 const labels: Record<OrgType, { question: string; prefix: string }> = {
   ej: { question: "Qual o nome da sua Empresa Júnior?", prefix: "Empresa Júnior" },
@@ -34,13 +34,12 @@ const passwordRules = [
 ];
 
 const stepIndex: Record<Step, number> = {
-  choose: 0, type: 1, name: 2, "admin-auth": 3,
-  "access-code": 1, "join-auth": 2,
+  choose: 0, type: 1, name: 2, "ws-password": 3, "admin-auth": 4,
+  "join-form": 1,
 };
 
 export default function Welcome() {
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
   const { user, loading: authLoading } = useAuth();
 
   const [step, setStep] = useState<Step>("choose");
@@ -50,6 +49,7 @@ export default function Welcome() {
   // Create workspace flow
   const [orgType, setOrgType] = useState<OrgType | null>(null);
   const [orgName, setOrgName] = useState("");
+  const [wsPassword, setWsPassword] = useState("");
 
   // Admin auth
   const [adminEmail, setAdminEmail] = useState("");
@@ -58,8 +58,8 @@ export default function Welcome() {
   const [showPassword, setShowPassword] = useState(false);
 
   // Join workspace flow
-  const [accessCode, setAccessCode] = useState("");
   const [joinWsName, setJoinWsName] = useState("");
+  const [joinWsPassword, setJoinWsPassword] = useState("");
   const [joinUsername, setJoinUsername] = useState("");
   const [joinPassword, setJoinPassword] = useState("");
 
@@ -73,18 +73,6 @@ export default function Welcome() {
       navigate("/", { replace: true });
     }
   }, [authLoading, user, navigate]);
-
-  // Handle ?flow=join from pending redirects
-  useEffect(() => {
-    const flow = searchParams.get("flow");
-    const preCode = localStorage.getItem("pendingAccessCode");
-    const preWsName = localStorage.getItem("pendingWorkspaceName");
-    if (flow === "join" && preCode) {
-      setAccessCode(preCode);
-      setJoinWsName(preWsName || "Workspace");
-      setStep("join-auth");
-    }
-  }, [searchParams]);
 
   const animateTo = (next: Step, cb?: () => void) => {
     const goingForward = (stepIndex[next] ?? 0) >= (stepIndex[step] ?? 0);
@@ -102,13 +90,19 @@ export default function Welcome() {
     }, 200);
   };
 
-  // ---- ADMIN FLOW ----
+  // ---- CREATE FLOW ----
   const handleSelectType = (t: OrgType) => animateTo("name", () => setOrgType(t));
 
   const handleNameContinue = () => {
     if (!orgType || !orgName.trim()) return;
-    localStorage.setItem("onboardingType", orgType);
+    animateTo("ws-password");
+  };
+
+  const handleWsPasswordContinue = () => {
+    if (!wsPassword.trim()) return;
+    localStorage.setItem("onboardingType", orgType!);
     localStorage.setItem("onboardingName", orgName.trim());
+    localStorage.setItem("onboardingPassword", wsPassword.trim());
     animateTo("admin-auth");
   };
 
@@ -135,13 +129,15 @@ export default function Welcome() {
       if (signupErr) throw signupErr;
       if (data.session) {
         try {
-          await supabase.rpc("create_workspace_with_membership", {
+          await (supabase as any).rpc("create_workspace_with_membership", {
             _type: orgType || "ej",
             _name: orgName.trim(),
+            _password: wsPassword.trim(),
           });
         } catch (wsErr) {
           console.error("Workspace creation error:", wsErr);
         }
+        localStorage.removeItem("onboardingPassword");
         navigate("/", { replace: true });
       } else {
         toast.success("Conta criada! Verifique seu email para confirmar.");
@@ -154,66 +150,16 @@ export default function Welcome() {
   };
 
   // ---- JOIN FLOW ----
-
-  // Step 1: Validate access code (try invite_token first, then workspace ID)
-  const handleAccessCodeContinue = async () => {
-    setError("");
-    const code = accessCode.trim();
-    if (code.length < 4) return;
-    setLoading(true);
-    try {
-      // Try by invite_token
-      let { data } = await supabase
-        .from("workspaces")
-        .select("id, name, invite_token")
-        .eq("invite_token", code)
-        .single();
-      // Try uppercase
-      if (!data) {
-        ({ data } = await supabase
-          .from("workspaces")
-          .select("id, name, invite_token")
-          .eq("invite_token", code.toUpperCase())
-          .single());
-      }
-      // Try by workspace ID (the admin panel now shows workspace ID as code)
-      if (!data) {
-        ({ data } = await supabase
-          .from("workspaces")
-          .select("id, name, invite_token")
-          .eq("id", code)
-          .single());
-      }
-      if (!data) {
-        setError("Código inválido. Verifique e tente novamente.");
-        return;
-      }
-      setJoinWsName(data.name);
-      // Store the ACTUAL invite_token from DB for the RPC call
-      const actualToken = data.invite_token || code;
-      localStorage.setItem("pendingAccessCode", actualToken);
-      localStorage.setItem("pendingWorkspaceName", data.name);
-      localStorage.setItem("targetWorkspaceId", data.id);
-      animateTo("join-auth");
-    } catch {
-      setError("Erro ao verificar o código. Tente novamente.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Step 2: Create account + request access
   const usernameValid = /^[a-z0-9_]{3,}$/.test(joinUsername);
 
-  const handleJoinSignup = async (e: React.FormEvent) => {
+  const handleJoinWorkspace = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!usernameValid || joinPassword.length < 8) return;
+    if (!joinWsName.trim() || !joinWsPassword.trim() || !usernameValid || joinPassword.length < 8) return;
     setError("");
     setLoading(true);
     joiningRef.current = true;
     try {
-      const targetWsId = localStorage.getItem("targetWorkspaceId") || "";
-      const shortId = targetWsId.split("-")[0] || "ws";
+      const shortId = joinWsName.trim().replace(/\s+/g, "").slice(0, 8).toLowerCase();
       const fakeEmail = `${joinUsername}__${shortId}@member.dashbuzz.app`;
 
       // Check if user already exists
@@ -222,19 +168,17 @@ export default function Welcome() {
       });
 
       if (existingEmail) {
-        // User exists — login
         const { error: loginErr } = await supabase.auth.signInWithPassword({
           email: existingEmail as string,
           password: joinPassword,
         });
         if (loginErr) {
           joiningRef.current = false;
-          setError("Senha incorreta. Tente novamente.");
+          setError("Senha do usuário incorreta. Tente novamente.");
           setLoading(false);
           return;
         }
       } else {
-        // New user — create account
         const { data: signupData, error: signupErr } = await supabase.auth.signUp({
           email: fakeEmail,
           password: joinPassword,
@@ -249,22 +193,31 @@ export default function Welcome() {
         }
       }
 
-      // Request workspace access — pass invite_token or workspace ID (RPC handles both)
-      localStorage.setItem("memberUsername", joinUsername);
-      const wsIdForRpc = localStorage.getItem("pendingAccessCode") || localStorage.getItem("targetWorkspaceId") || "";
-      const { data: result } = await supabase.rpc("request_workspace_access", {
-        p_invite_token: wsIdForRpc,
-        p_requester_name: joinUsername,
+      // Join workspace via RPC (validates password server-side)
+      const { data: result } = await (supabase as any).rpc("join_workspace", {
+        p_workspace_name: joinWsName.trim(),
+        p_workspace_password: joinWsPassword.trim(),
       });
       const r = result as any;
-      if (r?.error === "already_member") {
-        localStorage.removeItem("pendingAccessCode");
-        localStorage.removeItem("pendingWorkspaceName");
-        navigate("/", { replace: true });
-      } else {
-        // Keep targetWorkspaceId for pending flow
-        navigate("/pending-approval", { replace: true });
+
+      if (r?.error === "workspace_not_found") {
+        joiningRef.current = false;
+        setError("Workspace não encontrado. Verifique o nome.");
+        setLoading(false);
+        return;
       }
+      if (r?.error === "wrong_password") {
+        joiningRef.current = false;
+        setError("Senha do workspace incorreta.");
+        setLoading(false);
+        return;
+      }
+
+      // Success — joined or already_member
+      if (r?.workspace_id) {
+        localStorage.setItem("targetWorkspaceId", r.workspace_id);
+      }
+      navigate("/", { replace: true });
     } catch (err: any) {
       joiningRef.current = false;
       setError(err.message || "Erro ao acessar. Tente novamente.");
@@ -275,12 +228,12 @@ export default function Welcome() {
 
   // ---- HEADLINE ----
   const headline = (() => {
-    if (step === "admin-auth") return orgName.trim() || "DASHBUZZ";
+    if (step === "admin-auth" || step === "ws-password") return orgName.trim() || "DASHBUZZ";
     if (step === "name" && orgName.trim() && orgType) {
       const prefix = labels[orgType].prefix;
       return `${prefix ? prefix + " " : ""}${orgName.trim()}`;
     }
-    if (step === "join-auth") return joinWsName;
+    if (step === "join-form" && joinWsName) return joinWsName;
     return "DASHBUZZ";
   })();
 
@@ -318,20 +271,20 @@ export default function Welcome() {
               {
                 icon: UserPlus,
                 title: "Criar um workspace",
-                sub: "Você será o administrador",
+                sub: "Crie e defina uma senha de acesso",
                 action: () => animateTo("type"),
               },
               {
                 icon: LogIn,
-                title: "Já tenho um workspace",
+                title: "Já tenho conta",
                 sub: "Entre com seu usuário e senha",
                 action: () => navigate("/auth?mode=login"),
               },
               {
                 icon: Users,
                 title: "Entrar em um workspace",
-                sub: "Use o código de acesso",
-                action: () => animateTo("access-code"),
+                sub: "Use o nome e senha do workspace",
+                action: () => animateTo("join-form"),
               },
             ].map((opt) => (
               <button
@@ -408,13 +361,48 @@ export default function Welcome() {
           </div>
         )}
 
+        {/* ── STEP: WORKSPACE PASSWORD ── */}
+        {step === "ws-password" && (
+          <div className="glass-card-auth p-6 space-y-4">
+            <div className="text-center mb-2">
+              <p className="text-sm font-semibold text-white" style={dmSans}>Defina a senha do workspace</p>
+              <p className="text-xs text-white/40 mt-1" style={dmSans}>
+                Membros usarão esta senha para entrar em {orgName.trim()}
+              </p>
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-white/70" style={dmSans}>Senha do workspace</label>
+              <div className="relative">
+                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/30" />
+                <input
+                  type="text"
+                  placeholder="Ex: minha-organizacao-2024"
+                  value={wsPassword}
+                  onChange={(e) => setWsPassword(e.target.value)}
+                  autoFocus
+                  className="gold-input-focus w-full h-10 rounded-[10px] pl-9 pr-3 text-sm"
+                  style={dmSans}
+                  onKeyDown={(e) => e.key === "Enter" && wsPassword.trim() && handleWsPasswordContinue()}
+                />
+              </div>
+              <p className="text-xs text-white/35 leading-relaxed" style={dmSans}>
+                Escolha algo fácil de compartilhar com sua equipe.
+              </p>
+            </div>
+            <PrimaryButton onClick={handleWsPasswordContinue} disabled={!wsPassword.trim()}>
+              Continuar <ArrowRight className="h-4 w-4" />
+            </PrimaryButton>
+            <BackButton onClick={() => animateTo("name")} />
+          </div>
+        )}
+
         {/* ── STEP: ADMIN AUTH ── */}
         {step === "admin-auth" && (
           <form onSubmit={handleAdminSignup} className="glass-card-auth p-6 space-y-4">
             <div className="text-center mb-2">
-              <p className="text-sm font-semibold text-white" style={dmSans}>Crie sua conta de administrador</p>
+              <p className="text-sm font-semibold text-white" style={dmSans}>Crie sua conta</p>
               <p className="text-xs text-white/40 mt-1" style={dmSans}>
-                Você gerenciará o workspace {orgName.trim()}
+                Workspace: {orgName.trim()}
               </p>
             </div>
 
@@ -422,7 +410,7 @@ export default function Welcome() {
               value={adminEmail} onChange={setAdminEmail} autoFocus />
 
             <div className="space-y-2">
-              <label className="text-sm font-medium text-white/70" style={dmSans}>Senha</label>
+              <label className="text-sm font-medium text-white/70" style={dmSans}>Senha da conta</label>
               <div className="relative">
                 <input
                   type={showPassword ? "text" : "password"}
@@ -466,79 +454,61 @@ export default function Welcome() {
               {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
               Criar conta
             </PrimaryButton>
-            <BackButton onClick={() => animateTo("name")} />
+            <BackButton onClick={() => animateTo("ws-password")} />
           </form>
         )}
 
-        {/* ── STEP: ACCESS CODE (Etapa 1) ── */}
-        {step === "access-code" && (
-          <div className="glass-card-auth p-6 space-y-4">
+        {/* ── STEP: JOIN FORM (nome do workspace + senha + criar conta) ── */}
+        {step === "join-form" && (
+          <form onSubmit={handleJoinWorkspace} className="glass-card-auth p-6 space-y-4">
             <div className="text-center mb-2">
-              <p className="text-sm font-semibold text-white" style={dmSans}>Digite o código de acesso</p>
-              <p className="text-xs text-white/40 mt-1" style={dmSans}>Peça o código ao administrador do workspace</p>
+              <p className="text-sm font-semibold text-white" style={dmSans}>Entrar em um workspace</p>
+              <p className="text-xs text-white/40 mt-1" style={dmSans}>
+                Peça o nome e a senha ao responsável
+              </p>
             </div>
-            <input
-              type="text"
-              maxLength={36}
-              placeholder="Cole o código aqui"
-              value={accessCode}
-              onChange={(e) => { setAccessCode(e.target.value.replace(/[^a-zA-Z0-9\-]/g, "").slice(0, 36)); setError(""); }}
-              autoFocus
-              className="gold-input-focus w-full h-16 rounded-[10px] px-3 text-lg font-mono tracking-widest text-center uppercase"
-              style={dmSans}
-              onKeyDown={(e) => e.key === "Enter" && accessCode.length >= 4 && handleAccessCodeContinue()}
-            />
+
+            <InputField id="join-ws-name" label="Nome do workspace" type="text" placeholder="Nome exato do workspace"
+              value={joinWsName} onChange={setJoinWsName} autoFocus />
+
+            <InputField id="join-ws-pass" label="Senha do workspace" type="password" placeholder="Senha de acesso"
+              value={joinWsPassword} onChange={setJoinWsPassword} />
+
+            <div className="pt-2 border-t border-white/10">
+              <p className="text-xs text-white/40 mb-3" style={dmSans}>Seus dados de acesso pessoal:</p>
+
+              <div className="space-y-2 mb-3">
+                <label className="text-sm font-medium text-white/70" style={dmSans}>Nome de usuário</label>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40 text-sm" style={dmSans}>@</span>
+                  <input
+                    type="text"
+                    placeholder="seunome"
+                    value={joinUsername}
+                    onChange={(e) => setJoinUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ""))}
+                    className="gold-input-focus w-full h-10 rounded-[10px] pl-7 pr-3 text-sm"
+                    style={dmSans}
+                  />
+                </div>
+                <p className="text-xs text-white/35 leading-relaxed" style={dmSans}>
+                  Use nome_sobrenome. <strong className="text-white/50">Guarde-o bem</strong> para entrar novamente.
+                </p>
+                {joinUsername.length > 0 && !usernameValid && (
+                  <p className="text-xs" style={{ color: "#f87171", ...dmSans }}>Mínimo 3 caracteres (letras, números, _)</p>
+                )}
+              </div>
+
+              <InputField id="join-pass" label="Sua senha pessoal (mín. 8 caracteres)" type="password" placeholder="••••••••"
+                value={joinPassword} onChange={setJoinPassword} />
+            </div>
+
             <ErrorBanner error={error} />
-            <PrimaryButton onClick={handleAccessCodeContinue} disabled={accessCode.length < 4 || loading}>
+
+            <PrimaryButton type="submit" disabled={loading || !usernameValid || joinPassword.length < 8 || !joinWsName.trim() || !joinWsPassword.trim()}>
               {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-              Continuar <ArrowRight className="h-4 w-4" />
+              Entrar no workspace
             </PrimaryButton>
             <BackButton onClick={() => animateTo("choose")} />
-          </div>
-        )}
-
-        {/* ── STEP: JOIN AUTH (Etapa 2 — nome de usuário + senha) ── */}
-        {step === "join-auth" && (
-          <form onSubmit={handleJoinSignup} className="glass-card-auth p-6 space-y-4">
-            <div className="text-center mb-2">
-              <p className="text-sm font-semibold text-white" style={dmSans}>Crie sua conta</p>
-              <p className="text-xs text-white/40 mt-1" style={dmSans}>
-                Entrando em {joinWsName}
-              </p>
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-white/70" style={dmSans}>Nome de usuário</label>
-              <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40 text-sm" style={dmSans}>@</span>
-                <input
-                  type="text"
-                  placeholder="seunome"
-                  value={joinUsername}
-                  onChange={(e) => setJoinUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ""))}
-                  autoFocus
-                  className="gold-input-focus w-full h-10 rounded-[10px] pl-7 pr-3 text-sm"
-                  style={dmSans}
-                />
-              </div>
-              <p className="text-xs text-white/35 leading-relaxed" style={dmSans}>
-                Coloque seu nome_sobrenome. <strong className="text-white/50">Guarde-o bem</strong>, pois você precisará dele para entrar novamente.
-              </p>
-              {joinUsername.length > 0 && !usernameValid && (
-                <p className="text-xs" style={{ color: "#f87171", ...dmSans }}>Mínimo 3 caracteres (letras, números, _)</p>
-              )}
-            </div>
-
-            <InputField id="join-pass" label="Senha (mín. 8 caracteres)" type="password" placeholder="••••••••"
-              value={joinPassword} onChange={setJoinPassword} />
-
-            <ErrorBanner error={error} />
-
-            <PrimaryButton type="submit" disabled={loading || !usernameValid || joinPassword.length < 8}>
-              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-              Solicitar acesso
-            </PrimaryButton>
-            <BackButton onClick={() => animateTo("access-code")} />
           </form>
         )}
       </div>

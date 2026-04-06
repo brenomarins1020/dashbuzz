@@ -136,7 +136,7 @@ const Index = () => {
 
   const { user, signOut } = useAuth();
   const { theme, toggleTheme } = useTheme();
-  const { isAdmin, workspaceId, workspaceName } = useWorkspace();
+  const { workspaceId, workspaceName } = useWorkspace();
 
   // Display name logic for synthetic emails
   const isMemberEmail = user?.email?.includes("@member.dashbuzz.app");
@@ -299,7 +299,7 @@ const Index = () => {
             {/* Right: Gestão + Config */}
             <div className="flex-1 flex items-center justify-end">
               <div className="h-6 mx-4" style={{ borderLeft: "1px solid rgba(255,255,255,0.12)" }} />
-              {isAdmin && (
+              {(
                 <button
                   ref={(el) => { desktopNavRefs.current["presencas"] = el; }}
                   onClick={() => changeView("presencas")}
@@ -322,7 +322,7 @@ const Index = () => {
                   Gestão
                 </button>
               )}
-              {isAdmin && (
+              {(
                 <button
                   ref={(el) => { desktopNavRefs.current["settings"] = el; }}
                   onClick={() => changeView("settings")}
@@ -357,11 +357,6 @@ const Index = () => {
                     <span className="text-[13px] font-medium text-white/70 truncate max-w-[120px]">
                       {displayName}
                     </span>
-                    {isAdmin && (
-                      <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400">
-                        admin
-                      </span>
-                    )}
                   </button>
                 </PopoverTrigger>
                 <PopoverContent align="end" className="w-48 p-2" sideOffset={8}>
@@ -388,7 +383,7 @@ const Index = () => {
 
       {/* Mobile header + bottom nav */}
       <MobileHeader viewTitle={VIEW_LABELS[view]} />
-      <MobileBottomNav view={view} changeView={changeView} isAdmin={isAdmin} onSignOut={signOut} />
+      <MobileBottomNav view={view} changeView={changeView} onSignOut={signOut} />
 
       {/* Main content */}
       <main
@@ -437,10 +432,10 @@ const Index = () => {
                 <h2 className="text-lg font-bold font-heading tracking-wide uppercase">Configurações</h2>
                 <p className="text-sm text-muted-foreground mt-1">Gerencie preferências e dados do app.</p>
               </div>
-              {isAdmin && <MembersPanel />}
+              <MembersPanel />
               <SettingsPanel theme={theme} toggleTheme={toggleTheme} />
-              {isAdmin && <WorkspaceConfigPanel />}
-              {isAdmin && <AdminAnnouncementsPanel />}
+              <WorkspaceConfigPanel />
+              <AdminAnnouncementsPanel />
               <BackupPanel />
               {/* Lixeira collapsible */}
               <Collapsible>

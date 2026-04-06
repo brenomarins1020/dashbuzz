@@ -28,7 +28,6 @@ import { cn } from "@/lib/utils";
 import { useAppointments, type Appointment, type AppointmentStatus, type AppointmentRecurrence } from "@/hooks/useAppointments";
 import { useWorkspaceConfig } from "@/hooks/useWorkspaceConfig";
 import { useTeam } from "@/hooks/useTeam";
-import { useWorkspace } from "@/hooks/useWorkspace";
 import { StatusBadgeFilled } from "@/components/StatusBadgeFilled";
 import { QuickEditModal, type QuickEditItem } from "@/components/QuickEditModal";
 import { ChipSelect, type ChipOption } from "@/components/ChipSelect";
@@ -597,7 +596,6 @@ function MobileAppointmentCreation({ newTitle, setNewTitle, newType, setNewType,
 export function CompromissosPanel() {
   const { appointments, addAppointment, updateAppointment, removeAppointment } = useAppointments();
   const config = useWorkspaceConfig();
-  const { isAdmin } = useWorkspace();
   const { members } = useTeam();
   const { activeResponsibles, activeAppointmentTypes, appointmentTypes } = config;
 
@@ -771,16 +769,14 @@ export function CompromissosPanel() {
           </span>
         )}
         <StatusBadgeFilled status={a.status === "pendente" ? "Pendente" : a.status === "concluído" ? "Concluído" : "Cancelado"} color={STATUS_COLORS[a.status]} />
-        {isAdmin && (
-          <div className="flex gap-0.5 shrink-0">
-            <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground" onClick={() => setEditingId(a.id)}>
-              <Pencil className="h-3.5 w-3.5" />
-            </Button>
-            <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive" onClick={() => setDeleteId(a.id)} title="Mover para lixeira">
-              <Trash2 className="h-3.5 w-3.5" />
-            </Button>
-          </div>
-        )}
+        <div className="flex gap-0.5 shrink-0">
+          <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground" onClick={() => setEditingId(a.id)}>
+            <Pencil className="h-3.5 w-3.5" />
+          </Button>
+          <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive" onClick={() => setDeleteId(a.id)} title="Mover para lixeira">
+            <Trash2 className="h-3.5 w-3.5" />
+          </Button>
+        </div>
       </div>
     );
   };

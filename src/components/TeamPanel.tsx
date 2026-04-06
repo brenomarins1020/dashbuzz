@@ -16,7 +16,7 @@ export function TeamPanel() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<TeamMember | null>(null);
   const { toast } = useToast();
-  const { workspaceId, isAdmin } = useWorkspace();
+  const { workspaceId } = useWorkspace();
   const qc = useQueryClient();
 
   // Fetch membership roles
@@ -115,12 +115,10 @@ export function TeamPanel() {
           <h2 className="text-lg md:text-xl font-bold font-heading tracking-wide uppercase">Time de Mercado</h2>
           <p className="text-sm text-muted-foreground mt-0.5">Marketing e Vendas (PROJEC)</p>
         </div>
-        {isAdmin && (
-          <Button onClick={handleAdd} className="gap-2">
-            <Plus className="h-4 w-4" />
-            Adicionar membro
-          </Button>
-        )}
+        <Button onClick={handleAdd} className="gap-2">
+          <Plus className="h-4 w-4" />
+          Adicionar membro
+        </Button>
       </div>
 
       {members.length === 0 ? (
@@ -137,7 +135,6 @@ export function TeamPanel() {
                 key={member.id}
                 member={member}
                 role={getRoleForUser(member.user_id)}
-                isAdmin={isAdmin}
                 isCreator={isCreator}
                 onEdit={() => handleEdit(member)}
                 onRemove={async () => {
@@ -182,7 +179,6 @@ export function TeamPanel() {
 function MemberCard({
   member,
   role,
-  isAdmin,
   isCreator,
   onEdit,
   onRemove,
@@ -191,7 +187,6 @@ function MemberCard({
 }: {
   member: TeamMember;
   role: string | null;
-  isAdmin: boolean;
   isCreator: boolean;
   onEdit: () => void;
   onRemove: () => void;
@@ -214,18 +209,16 @@ function MemberCard({
       </div>
 
       {/* Actions — hide trash for creator */}
-      {isAdmin && (
-        <div className="absolute top-2 right-2 flex gap-1">
-          <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-primary" onClick={onEdit}>
-            <Pencil className="h-3.5 w-3.5" />
+      <div className="absolute top-2 right-2 flex gap-1">
+        <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-primary" onClick={onEdit}>
+          <Pencil className="h-3.5 w-3.5" />
+        </Button>
+        {!isCreator && (
+          <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive" onClick={onRemove}>
+            <Trash2 className="h-3.5 w-3.5" />
           </Button>
-          {!isCreator && (
-            <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive" onClick={onRemove}>
-              <Trash2 className="h-3.5 w-3.5" />
-            </Button>
-          )}
-        </div>
-      )}
+        )}
+      </div>
 
       {/* Info */}
       <div className="space-y-1.5 pt-1">
@@ -241,7 +234,7 @@ function MemberCard({
                 <Crown className="h-2.5 w-2.5" />
                 Criador
               </span>
-            ) : isAdmin && onChangeRole ? (
+            ) : onChangeRole ? (
               <Popover>
                 <PopoverTrigger asChild>
                   <button

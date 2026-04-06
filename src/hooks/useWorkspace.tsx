@@ -11,10 +11,7 @@ interface WorkspaceContextType {
   taskCat1Label: string;
   taskCat2Label: string;
   loading: boolean;
-  hasPendingRequest: boolean;
-  isAdmin: boolean;
-  userRole: string;
-  createWorkspace: (type: string, name: string) => Promise<string>;
+  createWorkspace: (type: string, name: string, password: string) => Promise<string>;
   updateCategoryLabels: (cat1: string, cat2: string) => Promise<void>;
   refresh: () => Promise<void>;
 }
@@ -27,9 +24,6 @@ const WorkspaceContext = createContext<WorkspaceContextType>({
   taskCat1Label: "Categoria 1",
   taskCat2Label: "Categoria 2",
   loading: true,
-  hasPendingRequest: false,
-  isAdmin: false,
-  userRole: "member",
   createWorkspace: async () => "",
   updateCategoryLabels: async () => {},
   refresh: async () => {},
@@ -48,8 +42,6 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const [taskCat1Label, setTaskCat1Label] = useState("Categoria 1");
   const [taskCat2Label, setTaskCat2Label] = useState("Categoria 2");
   const [loading, setLoading] = useState(true);
-  const [hasPendingRequest, setHasPendingRequest] = useState(false);
-  const [userRole, setUserRole] = useState("member");
   const creatingRef = useRef(false);
 
   const fetchWorkspace = useCallback(async () => {
@@ -61,7 +53,6 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         setWorkspaceName(null);
         setWorkspaceType(null);
         setWorkspaceCreatedAt(null);
-        setHasPendingRequest(false);
         return;
       }
 
@@ -71,22 +62,16 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       // Get all memberships for this user
       const { data: memberships } = await supabase
         .from("memberships")
-        .select("workspace_id, role")
+        .select("workspace_id")
         .eq("user_id", user.id);
 
-      // If user has a target workspace, check if they're approved there
+      // If user has a target workspace, check if they're a member there
       if (targetWsId && memberships) {
         const targetMembership = memberships.find(m => m.workspace_id === targetWsId);
         if (targetMembership) {
-          // Approved in target workspace — go there
           localStorage.removeItem("targetWorkspaceId");
-          localStorage.removeItem("pendingAccessCode");
-          localStorage.removeItem("pendingWorkspaceName");
           const wsId = targetMembership.workspace_id;
-          const role = (targetMembership as any).role || "member";
           setWorkspaceId(wsId);
-          setUserRole(role);
-          setHasPendingRequest(false);
 
           const { data: ws } = await supabase.from("workspaces").select("*").eq("id", wsId).single();
           if (ws) {
@@ -100,25 +85,13 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
           }
           await migrateLocalStorageToDb(wsId);
           return;
-        } else {
-          // Not approved in target workspace — must be pending
-          setWorkspaceId(null);
-          setWorkspaceName(null);
-          setWorkspaceType(null);
-          setWorkspaceCreatedAt(null);
-          setHasPendingRequest(true);
-          setLoading(false);
-          return;
         }
       }
 
       if (memberships && memberships.length > 0) {
         localStorage.removeItem("targetWorkspaceId");
         const wsId = memberships[0].workspace_id;
-        const role = (memberships[0] as any).role || "member";
         setWorkspaceId(wsId);
-        setUserRole(role);
-        setHasPendingRequest(false);
 
         const { data: ws } = await supabase
           .from("workspaces")
@@ -149,18 +122,18 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       setWorkspaceName(null);
       setWorkspaceType(null);
       setWorkspaceCreatedAt(null);
-      setHasPendingRequest(false);
 
-      // Only auto-create workspace if user came from admin flow (not join flow)
-      const isJoinFlow = localStorage.getItem("pendingAccessCode") || localStorage.getItem("targetWorkspaceId");
+      // Auto-create workspace if user came from create flow
       const obType = localStorage.getItem("onboardingType");
       const obName = localStorage.getItem("onboardingName");
-      if (obType && obName && !creatingRef.current && !isJoinFlow) {
+      const obPass = localStorage.getItem("onboardingPassword");
+      if (obType && obName && !creatingRef.current) {
         creatingRef.current = true;
         try {
-          const { data: wsId, error: rpcErr } = await supabase
-            .rpc("create_workspace_with_membership", { _type: obType, _name: obName });
+          const { data: wsId, error: rpcErr } = await (supabase as any)
+            .rpc("create_workspace_with_membership", { _type: obType, _name: obName, _password: obPass || "123456" });
           if (!rpcErr && wsId) {
+            localStorage.removeItem("onboardingPassword");
             await fetchWorkspace();
           } else {
             console.error("Auto-create workspace failed:", rpcErr);
@@ -180,7 +153,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     }
   }, [authLoading, fetchWorkspace]);
 
-  // Realtime: detect role changes and removal from workspace
+  // Realtime: detect removal from workspace
   useEffect(() => {
     if (!user || !workspaceId) return;
 
@@ -200,40 +173,24 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
           });
         }
       )
-      .on(
-        "postgres_changes",
-        {
-          event: "UPDATE",
-          schema: "public",
-          table: "memberships",
-          filter: `user_id=eq.${user.id}`,
-        },
-        (payload) => {
-          const newRole = (payload.new as any)?.role;
-          if (newRole && newRole !== userRole) {
-            setUserRole(newRole);
-          }
-        }
-      )
       .subscribe();
 
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [user, workspaceId, userRole]);
+  }, [user, workspaceId]);
 
-  const createWorkspace = useCallback(async (type: string, name: string): Promise<string> => {
+  const createWorkspace = useCallback(async (type: string, name: string, password: string): Promise<string> => {
     if (!user) throw new Error("Not authenticated");
 
-    const { data: wsId, error } = await supabase
-      .rpc("create_workspace_with_membership", { _type: type, _name: name });
+    const { data: wsId, error } = await (supabase as any)
+      .rpc("create_workspace_with_membership", { _type: type, _name: name, _password: password });
 
     if (error) throw error;
 
     setWorkspaceId(wsId);
     setWorkspaceName(name);
     setWorkspaceType(type);
-    setUserRole("admin");
     localStorage.setItem("onboardingName", name);
     localStorage.setItem("onboardingType", type);
 
@@ -251,7 +208,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
 
   return (
     <WorkspaceContext.Provider
-      value={{ workspaceId, workspaceName, workspaceType, workspaceCreatedAt, taskCat1Label, taskCat2Label, loading, hasPendingRequest, isAdmin: userRole === "admin", userRole, createWorkspace, updateCategoryLabels, refresh: fetchWorkspace }}
+      value={{ workspaceId, workspaceName, workspaceType, workspaceCreatedAt, taskCat1Label, taskCat2Label, loading, createWorkspace, updateCategoryLabels, refresh: fetchWorkspace }}
     >
       {children}
     </WorkspaceContext.Provider>

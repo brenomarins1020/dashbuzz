@@ -18,11 +18,10 @@ const MORE_VIEWS: View[] = ["compromissos", "presencas", "settings"];
 interface MobileBottomNavProps {
   view: View;
   changeView: (v: View) => void;
-  isAdmin?: boolean;
   onSignOut?: () => void;
 }
 
-export function MobileBottomNav({ view, changeView, isAdmin = false, onSignOut }: MobileBottomNavProps) {
+export function MobileBottomNav({ view, changeView, onSignOut }: MobileBottomNavProps) {
   const [moreOpen, setMoreOpen] = useState(false);
 
   const isMoreActive = MORE_VIEWS.includes(view);
@@ -59,7 +58,6 @@ export function MobileBottomNav({ view, changeView, isAdmin = false, onSignOut }
           );
         })}
 
-        {/* More button */}
         <Drawer open={moreOpen} onOpenChange={setMoreOpen}>
           <DrawerTrigger asChild>
             <button
@@ -77,7 +75,6 @@ export function MobileBottomNav({ view, changeView, isAdmin = false, onSignOut }
             <div className="px-4 pt-2 pb-4">
               <p className="text-sm font-medium text-foreground mb-3">Menu</p>
               <div className="space-y-1">
-                {/* Compromissos — todos veem */}
                 <button
                   onClick={() => { setMoreOpen(false); changeView("compromissos"); }}
                   className="w-full flex items-center gap-3 px-3 py-3.5 rounded-xl hover:bg-muted/50 transition-colors"
@@ -88,20 +85,16 @@ export function MobileBottomNav({ view, changeView, isAdmin = false, onSignOut }
                   <ChevronRight className="h-4 w-4 text-muted-foreground/50" />
                 </button>
 
-                {/* Gestão — só admin */}
-                {isAdmin && (
-                  <button
-                    onClick={() => { setMoreOpen(false); changeView("presencas"); }}
-                    className="w-full flex items-center gap-3 px-3 py-3.5 rounded-xl hover:bg-muted/50 transition-colors"
-                    style={{ WebkitTapHighlightColor: "transparent" }}
-                  >
-                    <Users className="h-5 w-5 text-muted-foreground" />
-                    <span className="text-sm font-medium flex-1 text-left">Gestão</span>
-                    <ChevronRight className="h-4 w-4 text-muted-foreground/50" />
-                  </button>
-                )}
+                <button
+                  onClick={() => { setMoreOpen(false); changeView("presencas"); }}
+                  className="w-full flex items-center gap-3 px-3 py-3.5 rounded-xl hover:bg-muted/50 transition-colors"
+                  style={{ WebkitTapHighlightColor: "transparent" }}
+                >
+                  <Users className="h-5 w-5 text-muted-foreground" />
+                  <span className="text-sm font-medium flex-1 text-left">Gestão</span>
+                  <ChevronRight className="h-4 w-4 text-muted-foreground/50" />
+                </button>
 
-                {/* Configurações — todos veem */}
                 <button
                   onClick={() => { setMoreOpen(false); changeView("settings"); }}
                   className="w-full flex items-center gap-3 px-3 py-3.5 rounded-xl hover:bg-muted/50 transition-colors"
@@ -114,7 +107,6 @@ export function MobileBottomNav({ view, changeView, isAdmin = false, onSignOut }
 
                 <Separator className="my-2" />
 
-                {/* Sair — todos veem */}
                 <button
                   onClick={() => { setMoreOpen(false); onSignOut?.(); }}
                   className="w-full flex items-center gap-3 px-3 py-3.5 rounded-xl transition-colors text-destructive hover:bg-destructive/10"

@@ -4,9 +4,18 @@ import { Loader2, AlertCircle, Eye, EyeOff } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { AuthLayout } from "@/components/AuthLayout";
-import { generateMemberEmail, mapSupabaseError } from "@/lib/authHelpers";
-
 const dmSans = { fontFamily: "'DM Sans', sans-serif" };
+
+function generateMemberEmail(username: string): string {
+  return `${username}@member.dashbuzz.app`;
+}
+
+function mapSupabaseError(msg: string): string {
+  if (msg.includes("Invalid login")) return "Usuário ou senha incorretos.";
+  if (msg.includes("Email not confirmed")) return "Email não confirmado.";
+  if (msg.includes("User already registered")) return "Usuário já registrado.";
+  return msg || "Erro desconhecido.";
+}
 
 export default function Auth() {
   const navigate = useNavigate();
