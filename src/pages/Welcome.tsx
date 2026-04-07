@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  Trophy, Briefcase, Globe, ArrowRight, UserPlus, LogIn, Users,
+  Trophy, Briefcase, Globe, ArrowRight, UserPlus, Users,
   ChevronRight, AlertCircle, CheckCircle2, XCircle, Loader2,
   Eye, EyeOff, Lock,
 } from "lucide-react";
@@ -273,12 +273,6 @@ export default function Welcome() {
                 title: "Criar um workspace",
                 sub: "Crie e defina uma senha de acesso",
                 action: () => animateTo("type"),
-              },
-              {
-                icon: LogIn,
-                title: "Já tenho conta",
-                sub: "Entre com seu usuário e senha",
-                action: () => navigate("/auth?mode=login"),
               },
               {
                 icon: Users,
