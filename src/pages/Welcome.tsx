@@ -154,46 +154,35 @@ export default function Welcome() {
 
   const handleJoinWorkspace = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!joinWsName.trim() || !joinWsPassword.trim() || !usernameValid || joinPassword.length < 8) return;
+    if (!joinWsName.trim() || !joinWsPassword.trim() || !usernameValid || joinPassword.length < 6) return;
     setError("");
     setLoading(true);
     joiningRef.current = true;
     try {
-      const shortId = joinWsName.trim().replace(/\s+/g, "").slice(0, 8).toLowerCase();
-      const fakeEmail = `${joinUsername}__${shortId}@member.dashbuzz.app`;
-
-      // Check if user already exists
+      // Login with existing account
       const { data: existingEmail } = await supabase.rpc("get_email_by_username", {
         p_username: joinUsername,
       });
 
-      if (existingEmail) {
-        const { error: loginErr } = await supabase.auth.signInWithPassword({
-          email: existingEmail as string,
-          password: joinPassword,
-        });
-        if (loginErr) {
-          joiningRef.current = false;
-          setError("Senha do usuário incorreta. Tente novamente.");
-          setLoading(false);
-          return;
-        }
-      } else {
-        const { data: signupData, error: signupErr } = await supabase.auth.signUp({
-          email: fakeEmail,
-          password: joinPassword,
-          options: { data: { display_name: joinUsername } },
-        });
-        if (signupErr) throw signupErr;
-        if (!signupData.session) {
-          joiningRef.current = false;
-          setError("Erro ao criar conta. Tente novamente.");
-          setLoading(false);
-          return;
-        }
+      if (!existingEmail) {
+        joiningRef.current = false;
+        setError("Usuário não encontrado. Peça ao responsável para criar sua conta.");
+        setLoading(false);
+        return;
       }
 
-      // Join workspace via RPC (validates password server-side)
+      const { error: loginErr } = await supabase.auth.signInWithPassword({
+        email: existingEmail as string,
+        password: joinPassword,
+      });
+      if (loginErr) {
+        joiningRef.current = false;
+        setError("Senha incorreta. Tente novamente.");
+        setLoading(false);
+        return;
+      }
+
+      // Join workspace via RPC (validates workspace password server-side)
       const { data: result } = await (supabase as any).rpc("join_workspace", {
         p_workspace_name: joinWsName.trim(),
         p_workspace_password: joinWsPassword.trim(),
@@ -213,7 +202,6 @@ export default function Welcome() {
         return;
       }
 
-      // Success — joined or already_member
       if (r?.workspace_id) {
         localStorage.setItem("targetWorkspaceId", r.workspace_id);
       }
@@ -452,13 +440,13 @@ export default function Welcome() {
           </form>
         )}
 
-        {/* ── STEP: JOIN FORM (nome do workspace + senha + criar conta) ── */}
+        {/* ── STEP: JOIN FORM (login + workspace) ── */}
         {step === "join-form" && (
           <form onSubmit={handleJoinWorkspace} className="glass-card-auth p-6 space-y-4">
             <div className="text-center mb-2">
               <p className="text-sm font-semibold text-white" style={dmSans}>Entrar em um workspace</p>
               <p className="text-xs text-white/40 mt-1" style={dmSans}>
-                Peça o nome e a senha ao responsável
+                Peça os dados ao responsável do workspace
               </p>
             </div>
 
@@ -469,7 +457,7 @@ export default function Welcome() {
               value={joinWsPassword} onChange={setJoinWsPassword} />
 
             <div className="pt-2 border-t border-white/10">
-              <p className="text-xs text-white/40 mb-3" style={dmSans}>Seus dados de acesso pessoal:</p>
+              <p className="text-xs text-white/40 mb-3" style={dmSans}>Seu login:</p>
 
               <div className="space-y-2 mb-3">
                 <label className="text-sm font-medium text-white/70" style={dmSans}>Nome de usuário</label>
@@ -484,23 +472,20 @@ export default function Welcome() {
                     style={dmSans}
                   />
                 </div>
-                <p className="text-xs text-white/35 leading-relaxed" style={dmSans}>
-                  Use nome_sobrenome. <strong className="text-white/50">Guarde-o bem</strong> para entrar novamente.
-                </p>
                 {joinUsername.length > 0 && !usernameValid && (
                   <p className="text-xs" style={{ color: "#f87171", ...dmSans }}>Mínimo 3 caracteres (letras, números, _)</p>
                 )}
               </div>
 
-              <InputField id="join-pass" label="Sua senha pessoal (mín. 8 caracteres)" type="password" placeholder="••••••••"
+              <InputField id="join-pass" label="Sua senha" type="password" placeholder="••••••••"
                 value={joinPassword} onChange={setJoinPassword} />
             </div>
 
             <ErrorBanner error={error} />
 
-            <PrimaryButton type="submit" disabled={loading || !usernameValid || joinPassword.length < 8 || !joinWsName.trim() || !joinWsPassword.trim()}>
+            <PrimaryButton type="submit" disabled={loading || !usernameValid || joinPassword.length < 6 || !joinWsName.trim() || !joinWsPassword.trim()}>
               {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-              Entrar no workspace
+              Entrar
             </PrimaryButton>
             <BackButton onClick={() => animateTo("choose")} />
           </form>

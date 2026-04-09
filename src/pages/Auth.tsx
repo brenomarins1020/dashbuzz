@@ -197,7 +197,7 @@ export default function Auth() {
           <p className="text-xs text-white/40">
             Não tem conta?{" "}
             <button type="button" onClick={() => navigate("/welcome")} className="hover:underline" style={{ color: "#F5A623" }}>
-              Criar conta ou entrar com código
+              Criar ou entrar em um workspace
             </button>
           </p>
         </div>
