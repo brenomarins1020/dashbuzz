@@ -60,8 +60,7 @@ export default function Welcome() {
   // Join workspace flow
   const [joinWsName, setJoinWsName] = useState("");
   const [joinWsPassword, setJoinWsPassword] = useState("");
-  const [joinUsername, setJoinUsername] = useState("");
-  const [joinPassword, setJoinPassword] = useState("");
+  const [joinDisplayName, setJoinDisplayName] = useState("");
 
   // Shared
   const [loading, setLoading] = useState(false);
@@ -150,36 +149,72 @@ export default function Welcome() {
   };
 
   // ---- JOIN FLOW ----
-  const usernameValid = /^[a-z0-9_]{3,}$/.test(joinUsername);
+  const displayNameValid = joinDisplayName.trim().length >= 2;
 
   const handleJoinWorkspace = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!joinWsName.trim() || !joinWsPassword.trim() || !usernameValid || joinPassword.length < 6) return;
+    if (!joinWsName.trim() || !joinWsPassword.trim() || !displayNameValid) return;
     setError("");
     setLoading(true);
     joiningRef.current = true;
     try {
-      // Login with existing account
+      const nameSlug = joinDisplayName.trim().toLowerCase().replace(/\s+/g, "_").replace(/[^a-z0-9_]/g, "");
+      const fakeEmail = `${nameSlug}@member.dashbuzz.app`;
+      const autoPassword = `dash_${nameSlug}_2024`;
+
+      // Check if user already exists by display_name
       const { data: existingEmail } = await supabase.rpc("get_email_by_username", {
-        p_username: joinUsername,
+        p_username: joinDisplayName.trim(),
       });
 
-      if (!existingEmail) {
-        joiningRef.current = false;
-        setError("Usuário não encontrado. Peça ao responsável para criar sua conta.");
-        setLoading(false);
-        return;
-      }
-
-      const { error: loginErr } = await supabase.auth.signInWithPassword({
-        email: existingEmail as string,
-        password: joinPassword,
-      });
-      if (loginErr) {
-        joiningRef.current = false;
-        setError("Senha incorreta. Tente novamente.");
-        setLoading(false);
-        return;
+      if (existingEmail) {
+        // User exists — login automatically
+        const { error: loginErr } = await supabase.auth.signInWithPassword({
+          email: existingEmail as string,
+          password: autoPassword,
+        });
+        if (loginErr) {
+          // Try with the slug-based email as fallback
+          const { error: loginErr2 } = await supabase.auth.signInWithPassword({
+            email: fakeEmail,
+            password: autoPassword,
+          });
+          if (loginErr2) {
+            joiningRef.current = false;
+            setError("Erro ao entrar. Tente novamente ou use outro nome.");
+            setLoading(false);
+            return;
+          }
+        }
+      } else {
+        // User doesn't exist — create account automatically
+        const { data: signupData, error: signupErr } = await supabase.auth.signUp({
+          email: fakeEmail,
+          password: autoPassword,
+          options: { data: { display_name: joinDisplayName.trim() } },
+        });
+        if (signupErr) {
+          // Email might be taken (different display_name same slug) — try with random suffix
+          const suffix = Math.floor(Math.random() * 9999);
+          const altEmail = `${nameSlug}${suffix}@member.dashbuzz.app`;
+          const { data: signupData2, error: signupErr2 } = await supabase.auth.signUp({
+            email: altEmail,
+            password: autoPassword,
+            options: { data: { display_name: joinDisplayName.trim() } },
+          });
+          if (signupErr2) throw signupErr2;
+          if (!signupData2.session) {
+            joiningRef.current = false;
+            setError("Erro ao criar conta. Tente novamente.");
+            setLoading(false);
+            return;
+          }
+        } else if (!signupData.session) {
+          joiningRef.current = false;
+          setError("Erro ao criar conta. Tente novamente.");
+          setLoading(false);
+          return;
+        }
       }
 
       // Join workspace via RPC (validates workspace password server-side)
@@ -440,7 +475,7 @@ export default function Welcome() {
           </form>
         )}
 
-        {/* ── STEP: JOIN FORM (login + workspace) ── */}
+        {/* ── STEP: JOIN FORM ── */}
         {step === "join-form" && (
           <form onSubmit={handleJoinWorkspace} className="glass-card-auth p-6 space-y-4">
             <div className="text-center mb-2">
@@ -456,34 +491,12 @@ export default function Welcome() {
             <InputField id="join-ws-pass" label="Senha do workspace" type="password" placeholder="Senha de acesso"
               value={joinWsPassword} onChange={setJoinWsPassword} />
 
-            <div className="pt-2 border-t border-white/10">
-              <p className="text-xs text-white/40 mb-3" style={dmSans}>Seu login:</p>
-
-              <div className="space-y-2 mb-3">
-                <label className="text-sm font-medium text-white/70" style={dmSans}>Nome de usuário</label>
-                <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40 text-sm" style={dmSans}>@</span>
-                  <input
-                    type="text"
-                    placeholder="seunome"
-                    value={joinUsername}
-                    onChange={(e) => setJoinUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ""))}
-                    className="gold-input-focus w-full h-10 rounded-[10px] pl-7 pr-3 text-sm"
-                    style={dmSans}
-                  />
-                </div>
-                {joinUsername.length > 0 && !usernameValid && (
-                  <p className="text-xs" style={{ color: "#f87171", ...dmSans }}>Mínimo 3 caracteres (letras, números, _)</p>
-                )}
-              </div>
-
-              <InputField id="join-pass" label="Sua senha" type="password" placeholder="••••••••"
-                value={joinPassword} onChange={setJoinPassword} />
-            </div>
+            <InputField id="join-display-name" label="Seu nome" type="text" placeholder="Ex: João Silva"
+              value={joinDisplayName} onChange={setJoinDisplayName} />
 
             <ErrorBanner error={error} />
 
-            <PrimaryButton type="submit" disabled={loading || !usernameValid || joinPassword.length < 6 || !joinWsName.trim() || !joinWsPassword.trim()}>
+            <PrimaryButton type="submit" disabled={loading || !displayNameValid || !joinWsName.trim() || !joinWsPassword.trim()}>
               {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
               Entrar
             </PrimaryButton>
